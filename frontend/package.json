@@ -1,0 +1,8 @@
+﻿{
+  "name": "ccpm-frontend",
+  "private": true,
+  "scripts": {
+    "dev": "npm run dev --prefix ../backend"
+  },
+  "description": "Giao diện HTML/CSS/JavaScript được phục vụ bởi backend, không cần build riêng"
+}

@@ -1,0 +1,38 @@
+name: Sprint 1 CI
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test-only-password
+          POSTGRES_DB: qlth_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:test-only-password@localhost:5432/qlth_test
+      JWT_SECRET: ci-test-only-secret-at-least-32-bytes-long
+      PGPASSWORD: test-only-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Schema and roles for isolated test DB
+        run: |
+          docker exec -i ${{ job.services.postgres.id }} psql -U postgres -d qlth_test -v ON_ERROR_STOP=1 < backend/database/schema.sql
+          docker exec -i ${{ job.services.postgres.id }} psql -U postgres -d qlth_test -v ON_ERROR_STOP=1 < backend/database/roles.sql
+      - run: npm run migrate --prefix backend
+      - run: npm test
+      - run: npm run test:integration
+      - run: npm run test:sprint1
+      - run: npm run test:sprint2
+      - run: docker build -t qlth:sprint1 .

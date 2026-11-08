@@ -1,0 +1,22 @@
+services:
+  app:
+    build: .
+    env_file: backend/.env.staging
+    ports:
+      - '127.0.0.1:8001:8000'
+    volumes:
+      - templates:/app/backend/uploads/templates
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:8000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+volumes:
+  templates:

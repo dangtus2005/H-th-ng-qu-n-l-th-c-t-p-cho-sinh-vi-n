@@ -1,0 +1,52 @@
+{
+  "name": "ccpm",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "dev": "npm run dev --prefix backend",
+    "build": "npm run build --prefix backend",
+    "test": "npm test --prefix backend",
+    "test:integration": "npm run test:integration --prefix backend",
+    "test:sprint1": "npm run build && node backend/tests/sprint1-completion.cjs",
+    "test:sprint2": "npm run build && node backend/tests/sprint2.cjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.9",
+    "exceljs": "^4.4.0",
+    "express": "^5.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.5.0",
+    "nodemailer": "^10.3.1",
+    "openid-client": "^6.8.9",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.3.0",
+    "@types/node": "^26.6.6",
+    "@types/nodemailer": "^8.0.2",
+    "@types/pg": "^8.23.1",
+    "nodemon": "^3.1.14",
+    "prettier": "^3.9.10",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^7.0.2"
+  },
+  "allowScripts": {
+    "bcrypt@6.0.0": true
+  }
+}

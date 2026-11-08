@@ -1,0 +1,15 @@
+{
+  "name": "ccpm-backend",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "db:backup": "node scripts/backup.cjs",
+    "migrate": "node scripts/migrate.cjs",
+    "test:integration": "npm run build && node tests/integration.cjs",
+    "dev": "npm run build && npm start",
+    "start": "node dist/server.js",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test tests/auth.test.cjs"
+  }
+}

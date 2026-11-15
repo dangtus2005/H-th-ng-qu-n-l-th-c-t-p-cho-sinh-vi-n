@@ -17,7 +17,7 @@ export async function template(res: Response, headers: string[], name: string) {
   res.send(Buffer.from(await book.xlsx.writeBuffer()));
 }
 
-export async function readExcel(req: Request, headers: string[]) {
+export async function readExcel(req: Request, headers: string[], trailingOptional = 0) {
   const file = req.file;
   if (
     !file ||
@@ -41,13 +41,14 @@ export async function readExcel(req: Request, headers: string[]) {
   if (sheet.rowCount < 2 || sheet.rowCount > 201 || sheet.columnCount > headers.length) {
     fail('File cần 1–200 dòng, đúng cột mẫu');
   }
+  const columnCount = sheet.columnCount;
   headers.forEach((h, i) => {
-    if (
-      sheet
-        .getRow(1)
-        .getCell(i + 1)
-        .text.trim() !== h
-    ) {
+    const header = sheet
+      .getRow(1)
+      .getCell(i + 1)
+      .text.trim();
+    if (i >= headers.length - trailingOptional && !header && columnCount <= i) return;
+    if (header !== h) {
       fail(`Cột ${i + 1} cần là ${h}`);
     }
   });

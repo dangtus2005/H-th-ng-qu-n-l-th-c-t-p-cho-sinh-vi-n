@@ -1103,3 +1103,37 @@ input[type='file']::file-selector-button {
     flex-wrap: wrap;
   }
 }
+
+.lecturer-wishes .table-wrap {
+  overflow-x: auto;
+}
+.lecturer-wishes table {
+  width: 100%;
+  min-width: 680px;
+}
+.lecturer-wishes th:first-child {
+  width: 36%;
+}
+.lecturer-wishes td {
+  vertical-align: middle;
+}
+.lecturer-wishes [data-wish-rank] {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+}
+.lecturer-wishes [data-wish-rank] label {
+  margin-bottom: 0;
+}
+.lecturer-wishes [data-wish-rank] input {
+  width: 74px;
+  min-width: 0;
+}
+.lecturer-wishes [data-wish-rank] button {
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.data-table > :is(thead, tbody, tfoot) > tr > :is(th, td) + :is(th, td) {
+  border-inline-start: 1px solid #e2e8f0;
+}

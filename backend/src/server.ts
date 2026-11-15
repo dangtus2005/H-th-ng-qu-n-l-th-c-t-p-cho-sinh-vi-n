@@ -15,6 +15,7 @@ import * as sso from './controllers/sso.controller';
 import * as bulk from './controllers/bulk.controller';
 import * as profiles from './controllers/profiles.controller';
 import * as campaigns from './controllers/campaigns.controller';
+import topicsRouter from './routes/topics.routes';
 import { recoveryLimit } from './middlewares/recovery.middleware';
 
 export const app = express();
@@ -45,6 +46,7 @@ app.post('/api/v1/auth/login', auth.login);
 app.post('/api/v1/auth/forgot-password', recoveryLimit, recovery.forgotPassword);
 app.post('/api/v1/auth/reset-password', recoveryLimit, recovery.resetPassword);
 app.use('/api/v1', authenticateJWT);
+app.use('/api/v1/topic-workflow', topicsRouter);
 app.get('/api/v1/auth/me', auth.getMe);
 app.post('/api/v1/auth/logout', auth.logout);
 app.post('/api/v1/auth/switch-role', auth.switchRole);

@@ -1,4 +1,4 @@
-﻿let c;
+let c;
 let meta;
 let users = [];
 let records = [];
@@ -48,7 +48,7 @@ const form = (kind, title, fields, button = 'Lưu thông tin') =>
   </section>`;
 const table = (headers, rows) =>
   /* HTML */ `<div class="table-wrap">
-    <table>
+    <table class="data-table">
       <thead>
         <tr>
           ${headers.map((h) => /* HTML */ `<th scope="col">${h}</th>`).join('')}

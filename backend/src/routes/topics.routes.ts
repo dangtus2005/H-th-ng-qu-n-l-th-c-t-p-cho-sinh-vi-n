@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireRoles } from '../middlewares/rbac.middleware';
-import * as topics from '../controllers/topics.controller';
+import * as topics from '../controllers/topic-workflow.controller';
 
 const router = Router();
 

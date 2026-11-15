@@ -18,9 +18,12 @@ export const sprint2Pages = {
 };
 
 const phaseNames = {
+  CAMPAIGN_ENROLLMENT: 'Đăng ký tham gia đợt',
   TOPIC_SUBMISSION: 'Đề xuất đề tài',
   TOPIC_APPROVAL: 'Duyệt đề tài',
-  WISH_REGISTRATION: 'Đăng ký tham gia / nguyện vọng',
+  DIRECTION_SELECTION: 'Chọn hướng đề tài',
+  WISH_REGISTRATION: 'Đăng ký nguyện vọng',
+  MATCHING: 'Ghép cặp đề tài',
   OUTLINE_SUBMISSION: 'Nộp đề cương',
   MIDTERM_REPORT_1: 'Báo cáo giữa kỳ 1',
   MIDTERM_REPORT_2: 'Báo cáo giữa kỳ 2',
@@ -42,9 +45,9 @@ const input = (name, label, value = '', type = 'text', extra = '') =>
   /* HTML */ `<label
     >${label}<input name="${name}" value="${esc(value)}" type="${type}" ${extra}
   /></label>`;
-const textarea = (name, label, value = '') =>
+const textarea = (name, label, value = '', maxLength = 5000) =>
   /* HTML */ `<label class="span-2"
-    >${label}<textarea name="${name}" maxlength="5000">${esc(value)}</textarea>
+    >${label}<textarea name="${name}" maxlength="${maxLength}">${esc(value)}</textarea>
   </label>`;
 const select = (name, label, rows, value = '', optional = false) =>
   /* HTML */ `<label
@@ -63,7 +66,7 @@ const form = (kind, title, fields, button = 'Lưu thông tin') =>
   </section>`;
 const table = (heads, rows) =>
   /* HTML */ `<div class="table-wrap">
-    <table>
+    <table class="data-table">
       <thead>
         <tr>
           ${heads.map((h) => /* HTML */ `<th>${h}</th>`).join('')}
@@ -438,12 +441,32 @@ async function renderCampaigns(area) {
           'number',
           'required min="1" max="5"',
         ) +
+        input(
+          'min_credits_required',
+          'Tín chỉ tối thiểu (tùy chọn)',
+          p.enforce_min_credits ? p.min_credits_required : '',
+          'number',
+          'min="0" max="1000" step="1"',
+        ) +
+        textarea(
+          'prerequisite_note',
+          'Điều kiện tiên quyết (tùy chọn)',
+          p.prerequisite_note || '',
+          2000,
+        ) +
         /* HTML */ `<label class="checkbox span-2"
             ><input
               type="checkbox"
               name="allow_student_propose_topic"
               ${p.allow_student_propose_topic !== false ? 'checked' : ''}
             />Cho phép sinh viên tự đề xuất đề tài</label
+          >
+          <label class="checkbox span-2"
+            ><input
+              type="checkbox"
+              name="allow_self_find_company"
+              ${p.allow_self_find_company !== false ? 'checked' : ''}
+            />Cho phép sinh viên tự tìm nơi thực tập</label
           >
           <div><button type="button" data-s2-action="cancel-campaign">Hủy</button></div>`,
     );
@@ -477,6 +500,11 @@ async function renderCampaigns(area) {
             >
           </div>
         </div>
+        <p class="small muted">
+          Tín chỉ tối thiểu:
+          ${esc(campaign.enforce_min_credits ? campaign.min_credits_required : 'Không áp dụng')} ·
+          Điều kiện tiên quyết: ${esc(campaign.prerequisite_note || 'Không áp dụng')}
+        </p>
         ${manage() ? '<div class="row-actions"><button data-s2-action="edit-campaign">Sửa cấu hình</button><button class="danger" data-s2-action="delete-campaign">Xóa đợt nháp</button></div>' : '<p id="gate-message" role="status">Đang kiểm tra điều kiện đăng ký…</p><button class="primary" data-s2-action="enroll" disabled>Đăng ký tham gia đợt</button>'}
       </div>
     </section>
@@ -533,6 +561,12 @@ async function renderCampaigns(area) {
             input('title', 'Tên mốc', '', 'text', 'required maxlength="255"') +
             input('start_at', 'Bắt đầu', '', 'datetime-local', 'required') +
             input('end_at', 'Kết thúc', '', 'datetime-local', 'required') +
+            input(
+              'hard_deadline_at',
+              'Hạn cuối nhận báo cáo trễ (tùy chọn)',
+              '',
+              'datetime-local',
+            ) +
             '<label class="checkbox span-2"><input type="checkbox" name="is_locked">Khóa thủ công giai đoạn này</label>',
         )}
         <section class="panel">
@@ -587,19 +621,20 @@ async function renderCampaigns(area) {
         <button data-s2-action="eligibility-template">Tải mẫu Excel</button>
       </div>
       ${table(
-        ['Mã SV', 'Họ tên', 'Điều kiện', 'Lý do'],
+        ['Mã SV', 'Họ tên', 'Tín chỉ xác minh', 'Điều kiện', 'Lý do'],
         eligibility.map(
           (e) =>
             /* HTML */ `<tr>
               <td>${esc(e.code)}</td>
               <td>${esc(e.full_name)}</td>
-              <td>${esc(e.status)}</td>
-              <td>${esc(e.ineligible_reason || '—')}</td>
+              <td>${esc(e.verified_credits ?? '—')}</td>
+              <td>${esc(e.eligibility_issue ? 'Cần xác minh lại' : e.status)}</td>
+              <td>${esc(e.eligibility_issue || e.ineligible_reason || '—')}</td>
             </tr>`,
         ),
       )}
     </section>
-    ${form('eligibility', 'Nhập danh sách đủ điều kiện', '<label class="span-2">File XLSX<input type="file" name="file" accept=".xlsx" required><small>Trạng thái: ELIGIBLE, INELIGIBLE, DROPPED_OUT hoặc DEFERRED. Sinh viên phải có hồ sơ đúng ngành/khoa/hệ đào tạo của đợt.</small></label>', 'Nhập danh sách')}
+    ${form('eligibility', 'Nhập danh sách đủ điều kiện', '<label class="span-2">File XLSX<input type="file" name="file" accept=".xlsx" required><small>Trạng thái: ELIGIBLE, INELIGIBLE, DROPPED_OUT hoặc DEFERRED. Nhập verified_credits từ dữ liệu chính thức. Nhập YES ở cột prerequisite_met khi đã xác minh đạt điều kiện tiên quyết. Hai cột xác minh có thể bỏ trống nếu đợt không yêu cầu.</small></label>', 'Nhập danh sách')}
     <div id="s2-report">${report ? resultsHTML(report) : ''}</div>`;
 }
 
@@ -612,7 +647,7 @@ async function refreshGate() {
   polling = true;
   try {
     const id = selected;
-    const data = await c.api(`/campaigns/${id}/gate`);
+    const data = await c.api(`/campaigns/${id}/gate?phase=CAMPAIGN_ENROLLMENT`);
     if (!button.isConnected || id !== selected) {
       return;
     }
@@ -655,11 +690,13 @@ export function setupSprint2(context) {
         f.elements.title.value = m.title;
         f.elements.start_at.value = localDate(m.start_at);
         f.elements.end_at.value = localDate(m.end_at);
+        f.elements.hard_deadline_at.value = m.hard_deadline_at ? localDate(m.hard_deadline_at) : '';
         f.elements.is_locked.checked = m.is_locked_override === true;
       } else {
         f.elements.title.value = phaseNames[event.target.value];
         f.elements.start_at.value = '';
         f.elements.end_at.value = '';
+        f.elements.hard_deadline_at.value = '';
         f.elements.is_locked.checked = false;
       }
     }
@@ -724,9 +761,12 @@ export function setupSprint2(context) {
         });
       }
       if (kind === 'campaign') {
+        v.min_credits_required =
+          v.min_credits_required === '' ? null : Number(v.min_credits_required);
         v.max_students_per_topic = Number(v.max_students_per_topic);
         v.max_wish_choices = Number(v.max_wish_choices);
         v.allow_student_propose_topic = formData.has('allow_student_propose_topic');
+        v.allow_self_find_company = formData.has('allow_self_find_company');
         const result = await c.api(
           '/master-data/campaigns' + (editing === 'new' ? '' : '/' + selected),
           { method: editing === 'new' ? 'POST' : 'PATCH', body: v },
@@ -741,6 +781,9 @@ export function setupSprint2(context) {
             ...v,
             start_at: new Date(v.start_at).toISOString(),
             end_at: new Date(v.end_at).toISOString(),
+            hard_deadline_at: v.hard_deadline_at
+              ? new Date(v.hard_deadline_at).toISOString()
+              : null,
             is_locked: formData.has('is_locked'),
           },
         });

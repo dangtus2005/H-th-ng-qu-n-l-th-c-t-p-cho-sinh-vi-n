@@ -356,6 +356,37 @@ async function run() {
         is_locked_override: null,
         sequence_order: 2,
       });
+      if (n === 1) {
+        const groupId = id('student_groups', 1);
+        await insert(client, 'student_groups', {
+          id: groupId,
+          campaign_id: campaign,
+          leader_id: sv,
+          name: 'Nhóm đồ án Sprint 3 (mẫu)',
+        });
+        await client.query(
+          `INSERT INTO campaign_milestones (id,campaign_id,phase,title,start_at,end_at,sequence_order)
+           VALUES ($1,$2,'MATCHING','Ghép cặp đề tài mẫu',$3,$4,5)
+           ON CONFLICT (campaign_id,phase) DO NOTHING`,
+          [id('matching_milestone', n), campaign, at(18), at(28)],
+        );
+        const titles = ['Cổng quản lý nguyện vọng', 'Hệ thống theo dõi tiến độ đồ án'];
+        for (const [index, title] of titles.entries()) {
+          await insert(client, 'topics', {
+            id: id('topics', index + 1),
+            campaign_id: campaign,
+            department_id: id('departments', n),
+            supervisor_id: gv,
+            proposed_by_id: gv,
+            source: 'LECTURER_PROPOSED',
+            code: `DEMO_TOPIC_${index + 1}`,
+            title_vi: title + ' (mẫu)',
+            description: 'Đề tài đã duyệt để trình diễn đăng ký nguyện vọng và ghép cặp.',
+            max_students: 2,
+            status: 'APPROVED',
+          });
+        }
+      }
       await insert(client, 'timeline_overrides', {
         id: id('timeline_overrides', n),
         milestone_id: id('campaign_milestones', n),

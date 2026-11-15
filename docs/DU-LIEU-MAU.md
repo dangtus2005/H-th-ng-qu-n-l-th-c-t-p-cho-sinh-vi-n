@@ -29,5 +29,6 @@ Email dùng miền example.invalid để tránh nhầm với người thật. Đ
 - Ba đợt minh họa OPEN, DRAFT và CLOSED. Sinh viên mẫu đã có lịch sử đăng ký; nút đăng ký có thể hiển thị Đã đăng ký thay vì cho đăng ký lần nữa.
 - Ba học kỳ mẫu không đặt is_current để tránh thay đổi học kỳ hiện tại của dự án.
 - Các trường chưa phát sinh được giữ NULL đúng nghĩa: SSO, ảnh đại diện, lần đăng nhập đầu tiên, lý do không đủ điều kiện với sinh viên ELIGIBLE, read_at khi thông báo chưa đọc. Không điền giả chỉ để mọi ô đều khác NULL.
-- Không tạo phiên đăng nhập, token reset hoặc thêm mã vai trò ngoài 7 role đã thiết kế. Không tạo điểm/đề tài/nhóm cho các module ngoài Sprint 1–2 trong bộ mẫu này.
+- Đợt đồ án đang mở có một nhóm và hai đề tài đã duyệt để chạy [kịch bản Sprint 3-03](SPRINT-3-03.md). Script không tạo sẵn nguyện vọng hoặc kết quả ghép cặp.
+- Không tạo phiên đăng nhập, token reset, điểm hoặc thêm mã vai trò ngoài 7 role đã thiết kế.
 - Mật khẩu lưu bcrypt; PDF lưu trong thư mục upload và có checksum. Database kiểm tra khóa ngoại trong transaction.

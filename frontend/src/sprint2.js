@@ -19,7 +19,7 @@ export const sprint2Pages = {
 
 const phaseNames = {
   CAMPAIGN_ENROLLMENT: 'Đăng ký tham gia đợt',
-  TOPIC_SUBMISSION: 'Đề xuất đề tài',
+  TOPIC_SUBMISSION: 'Giảng viên gửi đề tài',
   TOPIC_APPROVAL: 'Duyệt đề tài',
   DIRECTION_SELECTION: 'Chọn hướng đề tài',
   WISH_REGISTRATION: 'Đăng ký nguyện vọng',
@@ -457,13 +457,6 @@ async function renderCampaigns(area) {
         /* HTML */ `<label class="checkbox span-2"
             ><input
               type="checkbox"
-              name="allow_student_propose_topic"
-              ${p.allow_student_propose_topic !== false ? 'checked' : ''}
-            />Cho phép sinh viên tự đề xuất đề tài</label
-          >
-          <label class="checkbox span-2"
-            ><input
-              type="checkbox"
               name="allow_self_find_company"
               ${p.allow_self_find_company !== false ? 'checked' : ''}
             />Cho phép sinh viên tự tìm nơi thực tập</label
@@ -488,10 +481,6 @@ async function renderCampaigns(area) {
           </div>
           <div>
             <span>Nguyện vọng tối đa</span><strong>${esc(campaign.max_wish_choices)}</strong>
-          </div>
-          <div>
-            <span>Tự đề xuất đề tài</span
-            ><strong>${campaign.allow_student_propose_topic ? 'Cho phép' : 'Tắt'}</strong>
           </div>
           <div>
             <span>Hệ đào tạo</span
@@ -765,7 +754,6 @@ export function setupSprint2(context) {
           v.min_credits_required === '' ? null : Number(v.min_credits_required);
         v.max_students_per_topic = Number(v.max_students_per_topic);
         v.max_wish_choices = Number(v.max_wish_choices);
-        v.allow_student_propose_topic = formData.has('allow_student_propose_topic');
         v.allow_self_find_company = formData.has('allow_self_find_company');
         const result = await c.api(
           '/master-data/campaigns' + (editing === 'new' ? '' : '/' + selected),

@@ -156,11 +156,6 @@ export async function renderThesisPrep(page, area, { api, request, esc, notify, 
     const remark = (label, name, value, max, required = false) =>
       `<label class="span-2">${label}<textarea name="${name}" maxlength="${max}" ${required ? 'required' : ''}>${esc(value)}</textarea></label>`;
     const t = selected || {};
-    const mentor =
-      role === 'STUDENT'
-        ? `<label>Giảng viên hướng dẫn<select name="supervisor_id">
-      ${option('', 'Chưa chọn · lưu nháp')}${data.advisers.map((a) => option(a.id, a.full_name, t.supervisor_id)).join('')}</select></label>`
-        : '';
     const fields =
       field('Tên đề tài', 'title_vi', t.title_vi, 500, true) +
       field('Hướng đề tài', 'research_field', t.research_field, 255, true) +
@@ -179,16 +174,15 @@ export async function renderThesisPrep(page, area, { api, request, esc, notify, 
         1500,
       ) +
       `<label>Số sinh viên tối đa<input type="number" name="max_students" min="1" max="${esc(data.max_students)}" value="${esc(t.max_students ?? data.max_students)}" required></label>` +
-      mentor +
       '<label>Tài liệu PDF (tối đa 5 MB)<input type="file" name="document" accept=".pdf,application/pdf"></label>';
     output.innerHTML =
-      (data.can_submit
+      (role === 'LECTURER' && data.can_submit
         ? panel(
             selected ? 'Chỉnh sửa đề tài' : 'Đề xuất đề tài',
             formMarkup('topic', fields, 'Lưu đề tài', t.id),
           )
-        : ['STUDENT', 'LECTURER'].includes(role)
-          ? '<p class="panel-body muted">Chưa thể đề xuất. Xem thời gian và quyền tự đề xuất tại mục Đợt.</p>'
+        : role === 'LECTURER'
+          ? '<p class="panel-body muted">Chưa thể gửi đề tài. Kiểm tra mốc gửi đề tài tại mục Đợt.</p>'
           : '') +
       panel(
         'Danh sách đề tài',

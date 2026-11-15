@@ -226,24 +226,17 @@ export const createCampaign = async (req: Request, res: Response): Promise<void>
     ) {
       fail('Hệ đào tạo không tồn tại');
     }
-    if (
-      b.allow_student_propose_topic !== undefined &&
-      typeof b.allow_student_propose_topic !== 'boolean'
-    ) {
-      fail('Cờ tự đề xuất không hợp lệ');
-    }
     const policy = eligibilityPolicy(b);
     if (b.allow_self_find_company !== undefined && typeof b.allow_self_find_company !== 'boolean')
       fail('Cấu hình tự tìm nơi thực tập không hợp lệ');
     rows[0] = (
       await client.query(
-        `UPDATE campaigns SET training_system=$1,max_students_per_topic=$2,max_wish_choices=$3,allow_student_propose_topic=$4,
-         enforce_min_credits=$6,min_credits_required=$7,prerequisite_note=$8,allow_self_find_company=$9 WHERE id=$5 RETURNING *`,
+        `UPDATE campaigns SET training_system=$1,max_students_per_topic=$2,max_wish_choices=$3,
+         enforce_min_credits=$5,min_credits_required=$6,prerequisite_note=$7,allow_self_find_company=$8 WHERE id=$4 RETURNING *`,
         [
           b.training_system || null,
           integer(b.max_students_per_topic ?? 2, 'SV/đề tài', 1, 50),
           integer(b.max_wish_choices ?? 3, 'Nguyện vọng', 1, 5),
-          b.allow_student_propose_topic ?? true,
           rows[0].id,
           policy.enforce_min_credits,
           policy.min_credits_required,

@@ -23,7 +23,7 @@
 
 - Tạo đợt theo học kỳ, khoa/ngành, hệ đào tạo; sửa quy tắc, loại và trạng thái; đọc theo data scope; xóa đợt nháp chưa có dữ liệu liên quan.
 - Admin/Đào tạo có quyền toàn hệ thống. Khoa quản lý đợt trong phạm vi được cấp. Khoa/ngành/học kỳ của đợt đã tạo được giữ cố định để bảo toàn phạm vi dữ liệu liên quan.
-- Quy tắc: 1–50 SV/đề tài, 1–5 nguyện vọng, bật/tắt sinh viên tự đề xuất. Hệ đào tạo trống nghĩa là không giới hạn.
+- Quy tắc: 1–50 SV/đề tài, 1–5 nguyện vọng. Chỉ giảng viên được đề xuất đề tài; sinh viên tra cứu đề tài đã duyệt. Hệ đào tạo trống nghĩa là không giới hạn.
 - Import điều kiện Excel: student_code, status, reason. Trạng thái: ELIGIBLE, INELIGIBLE, DROPPED_OUT, DEFERRED. Có kết quả từng dòng, kiểm tra đúng sinh viên/khoa/ngành/hệ đào tạo.
 - Sinh viên đủ điều kiện đăng ký tham gia đợt qua API và nút trên giao diện; đăng ký lặp không tạo dữ liệu trùng. Thu hồi điều kiện khóa tương tác mới, không tự xóa lịch sử đăng ký.
 - API Sprint 2 là **đăng ký tham gia đợt**. Đăng ký đề tài/nguyện vọng cụ thể, phân công hướng dẫn, ghép nhóm thuộc module tiếp theo; phải dùng lại gateState và kiểm tra hạn mức/quy tắc trong transaction phân công. Sprint 2 chưa tạo những nghiệp vụ đó.

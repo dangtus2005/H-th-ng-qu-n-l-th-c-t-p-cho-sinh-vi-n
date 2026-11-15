@@ -5,6 +5,7 @@ import { renderMatching } from './matching.js';
 import { renderAcademic } from './academic.js';
 import { renderResults } from './results.js';
 import { renderThesisPrep } from './thesis-prep.js';
+import { renderTopicWorkflow } from './topic-workflow.js';
 import { extraPages, renderExtra, recoveryHTML, setupExtras } from './sprint1.js';
 const app = document.querySelector('#app');
 const notice = document.querySelector('#notice');
@@ -27,7 +28,11 @@ const titles = {
   results: ['Tổng kết đợt', 'Theo dõi tiến độ, điểm và phúc khảo.'],
   notifications: ['Thông báo', 'Xem cập nhật của bạn.'],
   'thesis-groups': ['Nhóm đồ án', 'Lập nhóm, chọn hướng và xác nhận lời mời.'],
-  'thesis-topics': ['Đề tài đồ án', 'Đề xuất, duyệt và tra cứu đề tài trong đợt.'],
+  'thesis-topics': ['Đề tài đồ án', 'Giảng viên đề xuất; sinh viên tra cứu đề tài đã duyệt.'],
+  'topic-workflow': [
+    'Đề xuất & duyệt',
+    'Luồng Sprint 3: giảng viên gửi, cán bộ duyệt, sinh viên xem đề tài đã duyệt.',
+  ],
   'topic-archive': ['Kho đề tài', 'Tìm đề tài theo năm, hướng và giảng viên.'],
   'training-systems': ['Hệ đào tạo', 'Quản lý các hệ đào tạo của trường.'],
   ...extraPages,
@@ -62,7 +67,15 @@ function navigation(currentPage) {
     ['KẾ HOẠCH & TÀI LIỆU', ['academic-years', 'semesters', 'campaigns', 'document-templates']],
     [
       'ĐỀ TÀI',
-      ['thesis-groups', 'thesis-topics', 'wishes', 'matching', 'topic-archive', 'thesis-reports'],
+      [
+        'thesis-groups',
+        'thesis-topics',
+        'topic-workflow',
+        'wishes',
+        'matching',
+        'topic-archive',
+        'thesis-reports',
+      ],
     ],
     ['THỰC TẬP & ĐÁNH GIÁ', ['internships', 'rubrics', 'results']],
     ['CÁ NHÂN', ['profile', 'notifications', 'account']],
@@ -84,6 +97,15 @@ function navigation(currentPage) {
               !session.active_role.major_id)
           );
         if (key === 'thesis-groups') return role === 'STUDENT';
+        if (key === 'topic-workflow')
+          return [
+            'STUDENT',
+            'LECTURER',
+            'DEPT_HEAD',
+            'FACULTY_MANAGER',
+            'TRAINING_DEPT',
+            'SYSTEM_ADMIN',
+          ].includes(role);
         return !['users', 'bulk-import', 'audit'].includes(key) || role === 'SYSTEM_ADMIN';
       });
       return visible.length
@@ -371,6 +393,15 @@ async function render() {
     }
     if (currentPage === 'matching') {
       await renderMatching(area, { api, esc, notify, role: session.active_role.role_code });
+      return;
+    }
+    if (currentPage === 'topic-workflow') {
+      await renderTopicWorkflow(area, {
+        api,
+        esc,
+        notify,
+        role: session.active_role.role_code,
+      });
       return;
     }
     if (['thesis-groups', 'thesis-topics', 'topic-archive'].includes(currentPage)) {

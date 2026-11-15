@@ -48,9 +48,6 @@ export const saveCampaign = async (req: Request, res: Response) => {
     if (!['THESIS', 'INTERNSHIP', 'COMBINED'].includes(b.type)) {
       fail('Loại đợt không hợp lệ');
     }
-    if (typeof b.allow_student_propose_topic !== 'boolean') {
-      fail('Cờ tự đề xuất không hợp lệ');
-    }
     if (b.allow_self_find_company !== undefined && typeof b.allow_self_find_company !== 'boolean')
       fail('Cấu hình tự tìm nơi thực tập không hợp lệ');
     const training = b.training_system ? text(b.training_system, 'Hệ đào tạo', 50) : null;
@@ -69,7 +66,6 @@ export const saveCampaign = async (req: Request, res: Response) => {
       training,
       integer(b.max_students_per_topic, 'Số SV/đề tài', 1, 50),
       integer(b.max_wish_choices, 'Số nguyện vọng', 1, 5),
-      b.allow_student_propose_topic,
       id,
       policy.enforce_min_credits,
       policy.min_credits_required,
@@ -78,8 +74,8 @@ export const saveCampaign = async (req: Request, res: Response) => {
     ];
     const after = (
       await client.query(
-        `UPDATE campaigns SET code=$1,name=$2,type=$3,status=$4,training_system=$5,max_students_per_topic=$6,max_wish_choices=$7,allow_student_propose_topic=$8,
-         enforce_min_credits=$10,min_credits_required=$11,prerequisite_note=$12,allow_self_find_company=$13,updated_at=NOW() WHERE id=$9 RETURNING *`,
+        `UPDATE campaigns SET code=$1,name=$2,type=$3,status=$4,training_system=$5,max_students_per_topic=$6,max_wish_choices=$7,
+         enforce_min_credits=$9,min_credits_required=$10,prerequisite_note=$11,allow_self_find_company=$12,updated_at=NOW() WHERE id=$8 RETURNING *`,
         values,
       )
     ).rows[0];
@@ -492,6 +488,9 @@ export async function gateState(
   ) {
     return locked('Đợt thực tập không có nguyện vọng đề tài');
   }
+  if (phase === 'TOPIC_SUBMISSION') {
+    return locked('Chỉ giảng viên được đề xuất đề tài');
+  }
   if (
     phase === 'WISH_REGISTRATION' &&
     (
@@ -518,9 +517,6 @@ export async function gateState(
   }
   const issue = eligibilityReason(campaign, eligibility);
   if (issue) return locked(issue);
-  if (phase === 'TOPIC_SUBMISSION' && !campaign.allow_student_propose_topic) {
-    return locked('Đợt không cho phép sinh viên tự đề xuất');
-  }
   const milestone = (
     await client.query(
       `SELECT m.*,o.extended_until FROM campaign_milestones m

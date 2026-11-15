@@ -56,6 +56,7 @@ export const pageIcons = {
   notifications: 'history',
   'thesis-groups': 'users',
   'thesis-topics': 'file',
+  'topic-workflow': 'file',
   'topic-archive': 'book',
   audit: 'history',
   faculties: 'building',

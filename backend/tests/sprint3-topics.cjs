@@ -311,6 +311,12 @@ async function run() {
 
   await call(topicRoute(), null, null, 401);
   await call(topicRoute(), student.token, topicBody('Student proposal'), 403);
+  await call(`/campaigns/${ids.campaign}/topics`, student.token, topicBody('Student proposal'), 403);
+  check(
+    (await call(`/campaigns/${ids.campaign}/gate?phase=TOPIC_SUBMISSION`, student.token, null)).allowed,
+    false,
+    'Students cannot submit topics',
+  );
   await call(topicRoute(), otherLecturer.token, topicBody('Out-of-scope proposal'), 403);
   await call(topicRoute(), lecturer.token, { ...topicBody('Invalid proposal'), title_vi: '' }, 400);
 
@@ -451,6 +457,13 @@ async function run() {
     visible.map((topic) => topic.id).sort(),
     [first.id, third.id, fourth.id].sort(),
     'Only approved proposals in this campaign are visible',
+  );
+  check(
+    (await call(`/campaigns/${ids.campaign}/topics`, student.token, null)).topics
+      .map((topic) => topic.id)
+      .sort(),
+    [first.id, third.id, fourth.id].sort(),
+    'The legacy topic page only shows approved proposals to students',
   );
   check(
     (await call(topicRoute('/pending'), training.token, null)).map((topic) => topic.id),

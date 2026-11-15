@@ -236,7 +236,6 @@ async function run() {
         min_gpa_required: 2,
         max_students_per_topic: 2,
         max_wish_choices: 3,
-        allow_student_propose_topic: true,
         allow_self_find_company: true,
         created_by: manager,
         created_at: at(-20),

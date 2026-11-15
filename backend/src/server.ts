@@ -16,6 +16,8 @@ import * as bulk from './controllers/bulk.controller';
 import * as profiles from './controllers/profiles.controller';
 import * as campaigns from './controllers/campaigns.controller';
 import topicWorkflowRouter from './routes/topics.routes';
+
+
 import * as wishes from './controllers/wishes.controller';
 import * as groups from './controllers/groups.controller';
 import * as topics from './controllers/topics.controller';

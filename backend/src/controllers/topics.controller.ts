@@ -5,7 +5,6 @@ import { audit } from '../utils/audit';
 import { globalRole, integer } from '../utils/campaign-access';
 import { requireStaffPhase, thesisCampaign, thesisWrite } from '../utils/thesis-campaign';
 import { fail, text, uuid } from '../utils/validation';
-import { gateState } from './campaigns.controller';
 
 const reviewer = (req: Request) =>
   globalRole(req) || ['FACULTY_MANAGER', 'DEPT_HEAD'].includes(req.user!.active_role);
@@ -21,15 +20,11 @@ function mayReview(req: Request, department: string) {
 }
 
 async function authorDepartment(req: Request, db: PoolClient, campaign: any) {
-  const role = req.user!.active_role;
-  if (!['STUDENT', 'LECTURER'].includes(role))
-    fail('Chỉ sinh viên và giảng viên được đề xuất', 403);
+  if (req.user!.active_role !== 'LECTURER') fail('Chỉ giảng viên được đề xuất đề tài', 403);
   const department =
     (
       await db.query(
-        role === 'STUDENT'
-          ? 'SELECT m.department_id FROM student_profiles p JOIN majors m ON m.id=p.major_id WHERE p.user_id=$1'
-          : 'SELECT department_id FROM lecturer_profiles WHERE user_id=$1',
+        'SELECT department_id FROM lecturer_profiles WHERE user_id=$1',
         [req.user!.sub],
       )
     ).rows[0]?.department_id ?? req.user!.scope.department_id;
@@ -47,12 +42,7 @@ async function authorDepartment(req: Request, db: PoolClient, campaign: any) {
   ) {
     fail('Bạn chưa có bộ môn phù hợp với đợt', 403);
   }
-  if (role === 'STUDENT') {
-    const gate = await gateState(req, campaign.id, 'TOPIC_SUBMISSION', db);
-    if (!gate.allowed) fail(gate.reason, 403);
-  } else {
-    await requireStaffPhase(db, campaign, 'TOPIC_SUBMISSION');
-  }
+  await requireStaffPhase(db, campaign, 'TOPIC_SUBMISSION');
   return department as string;
 }
 
@@ -152,13 +142,15 @@ export const list = async (req: Request, res: Response) => {
         ORDER BY l.created_at DESC,l.id DESC LIMIT 1) AS feedback
      FROM topics t LEFT JOIN users u ON u.id=t.supervisor_id JOIN users a ON a.id=t.proposed_by_id
      WHERE t.campaign_id=$1 AND ($2::uuid IS NULL OR t.department_id=$2)
-       AND (t.status IN ('APPROVED','ASSIGNED') OR t.proposed_by_id=$3 OR t.supervisor_id=$3 OR $4::boolean)
+       AND (t.status IN ('APPROVED','ASSIGNED')
+            OR ($5::boolean AND (t.proposed_by_id=$3 OR t.supervisor_id=$3)) OR $4::boolean)
      ORDER BY t.updated_at DESC NULLS LAST,t.id`,
     [
       campaign.id,
       globalRole(req) ? null : scope.department_id,
       req.user!.sub,
       reviewer(req) && (role !== 'DEPT_HEAD' || !!scope.department_id),
+      role !== 'STUDENT',
     ],
   );
   const phases = (
@@ -172,21 +164,7 @@ export const list = async (req: Request, res: Response) => {
   const open = ['OPEN', 'IN_PROGRESS'].includes(campaign.status);
   const phaseOpen = (phase: string) =>
     open && Boolean(phases.find((p) => p.phase === phase)?.allowed);
-  let canSubmit = role === 'LECTURER' && phaseOpen('TOPIC_SUBMISSION');
-  let advisers: any[] = [];
-  if (role === 'STUDENT') {
-    const gate = await gateState(req, campaign.id, 'TOPIC_SUBMISSION');
-    canSubmit = open && gate.allowed;
-    if (canSubmit) {
-      const department = (
-        await pool.query(
-          'SELECT m.department_id FROM student_profiles p JOIN majors m ON m.id=p.major_id WHERE p.user_id=$1',
-          [req.user!.sub],
-        )
-      ).rows[0]?.department_id;
-      if (department) advisers = await permittedAdviser(pool, campaign, department);
-    }
-  }
+  const canSubmit = role === 'LECTURER' && phaseOpen('TOPIC_SUBMISSION');
   const assignable = rows.filter(
     (t) =>
       t.source === 'STUDENT_PROPOSED' &&
@@ -201,7 +179,6 @@ export const list = async (req: Request, res: Response) => {
   }
   res.json({
     can_submit: canSubmit,
-    advisers,
     max_students: campaign.max_students_per_topic ?? 2,
     topics: rows.map((t) => ({
       ...t,
@@ -229,6 +206,7 @@ export const list = async (req: Request, res: Response) => {
 };
 
 export const submit = async (req: Request, res: Response) => {
+  if (req.user!.active_role !== 'LECTURER') fail('Chỉ giảng viên được đề xuất đề tài', 403);
   const id = req.params.topicId ? uuid(req.params.topicId, 'Đề tài') : null;
   const fields = topicFields(req);
   const file = req.file;
@@ -243,21 +221,8 @@ export const submit = async (req: Request, res: Response) => {
     if (!['OPEN', 'IN_PROGRESS'].includes(campaign.status)) fail('Đợt chưa mở hoặc đã đóng', 403);
     if (fields.max_students > (campaign.max_students_per_topic ?? 2))
       fail('Số sinh viên vượt giới hạn của đợt');
-    const student = req.user!.active_role === 'STUDENT';
-    const requestedAdviser = req.body?.supervisor_id;
-    const supervisor = student
-      ? requestedAdviser
-        ? uuid(requestedAdviser, 'Giảng viên hướng dẫn')
-        : null
-      : req.user!.sub;
-    if (
-      student &&
-      supervisor &&
-      !(await permittedAdviser(db, campaign, department, supervisor)).length
-    ) {
-      fail('Giảng viên hướng dẫn không thuộc bộ môn hoặc đợt', 403);
-    }
-    const status = supervisor ? 'PENDING_APPROVAL' : 'DRAFT';
+    const supervisor = req.user!.sub;
+    const status = 'PENDING_APPROVAL';
     const previous = id
       ? (
           await db.query(
@@ -270,7 +235,7 @@ export const submit = async (req: Request, res: Response) => {
     if (
       previous &&
       (previous.department_id !== department ||
-        previous.source !== (student ? 'STUDENT_PROPOSED' : 'LECTURER_PROPOSED'))
+        previous.source !== 'LECTURER_PROPOSED')
     ) {
       fail('Đề tài không thuộc vai trò hoặc bộ môn đang sử dụng', 403);
     }
@@ -305,7 +270,7 @@ export const submit = async (req: Request, res: Response) => {
             campaign.id,
             department,
             req.user!.sub,
-            student ? 'STUDENT_PROPOSED' : 'LECTURER_PROPOSED',
+            'LECTURER_PROPOSED',
           ],
         );
     if (file)

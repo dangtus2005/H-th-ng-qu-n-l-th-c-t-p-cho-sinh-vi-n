@@ -1,0 +1,3 @@
+ALTER TYPE public.milestone_phase_enum ADD VALUE IF NOT EXISTS 'CAMPAIGN_ENROLLMENT';
+ALTER TYPE public.milestone_phase_enum ADD VALUE IF NOT EXISTS 'DIRECTION_SELECTION';
+ALTER TYPE public.milestone_phase_enum ADD VALUE IF NOT EXISTS 'MATCHING';

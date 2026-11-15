@@ -15,6 +15,15 @@ import * as sso from './controllers/sso.controller';
 import * as bulk from './controllers/bulk.controller';
 import * as profiles from './controllers/profiles.controller';
 import * as campaigns from './controllers/campaigns.controller';
+import * as wishes from './controllers/wishes.controller';
+import * as groups from './controllers/groups.controller';
+import * as topics from './controllers/topics.controller';
+import * as matching from './controllers/matching.controller';
+import * as rubrics from './controllers/rubrics.controller';
+import * as thesisReports from './controllers/thesis-reports.controller';
+import * as internships from './controllers/internships.controller';
+import * as results from './controllers/results.controller';
+import * as notifications from './controllers/notifications.controller';
 import { recoveryLimit } from './middlewares/recovery.middleware';
 
 export const app = express();
@@ -84,6 +93,80 @@ app.delete(
 );
 app.get('/api/v1/campaigns/:id/gate', campaigns.gate);
 app.post('/api/v1/campaigns/:id/enroll', campaigns.enroll);
+app.get('/api/v1/notifications', notifications.list);
+app.patch('/api/v1/notifications/:notificationId', notifications.read);
+app.get('/api/v1/campaigns/:id/results', results.list);
+app.put('/api/v1/campaigns/:id/results/weights', results.weights);
+app.post('/api/v1/campaigns/:id/results/publish', results.publish);
+app.post('/api/v1/campaigns/:id/results/appeals', results.appeal);
+app.patch('/api/v1/campaigns/:id/results/appeals/:appealId', results.resolve);
+app.post('/api/v1/campaigns/:id/results/lock', results.lock);
+app.get('/api/v1/campaigns/:id/results/export', results.exportCsv);
+app.get('/api/v1/campaigns/:id/results/activity', results.activity);
+const reportPdf = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 12, fieldSize: 8000 },
+}).single('document');
+app.get('/api/v1/campaigns/:id/rubrics', rubrics.list);
+app.post('/api/v1/campaigns/:id/rubrics', rubrics.create);
+app.put('/api/v1/campaigns/:id/rubrics/:slot', rubrics.bind);
+app.get('/api/v1/campaigns/:id/thesis-reports', thesisReports.list);
+app.get('/api/v1/campaigns/:id/thesis-reports/assignments/:assignmentId', thesisReports.reports);
+app.post(
+  '/api/v1/campaigns/:id/thesis-reports/assignments/:assignmentId',
+  reportPdf,
+  thesisReports.submit,
+);
+app.get('/api/v1/campaigns/:id/thesis-reports/:submissionId/file', thesisReports.download);
+app.post('/api/v1/campaigns/:id/thesis-reports/:submissionId/feedback', thesisReports.feedback);
+app.put(
+  '/api/v1/campaigns/:id/thesis-reports/:submissionId/grades/:studentId',
+  thesisReports.grade,
+);
+app.get('/api/v1/mentor-campaigns', internships.mentorCampaigns);
+app.get('/api/v1/campaigns/:id/internships', internships.list);
+app.post('/api/v1/campaigns/:id/internships', reportPdf, internships.apply);
+app.post('/api/v1/campaigns/:id/internships/companies', internships.company);
+app.patch('/api/v1/campaigns/:id/internships/companies/:companyId', internships.company);
+app.post('/api/v1/campaigns/:id/internships/companies/:companyId/mentors', internships.addMentor);
+app.get('/api/v1/campaigns/:id/internships/:placementId', internships.detail);
+app.patch('/api/v1/campaigns/:id/internships/:placementId', internships.review);
+app.get('/api/v1/campaigns/:id/internships/:placementId/evidence', internships.file);
+app.put('/api/v1/campaigns/:id/internships/:placementId/logs/:week', internships.log);
+app.patch('/api/v1/campaigns/:id/internships/:placementId/logs/:week', internships.reviewLog);
+app.post('/api/v1/campaigns/:id/internships/:placementId/reports', reportPdf, internships.report);
+app.get('/api/v1/campaigns/:id/internships/:placementId/reports/:reportId/file', internships.file);
+app.put('/api/v1/campaigns/:id/internships/:placementId/grade', internships.grade);
+app.get('/api/v1/campaigns/:id/groups', groups.list);
+app.post('/api/v1/campaigns/:id/groups', groups.create);
+app.patch('/api/v1/campaigns/:id/groups/:groupId', groups.edit);
+app.post('/api/v1/campaigns/:id/groups/:groupId/invitations', groups.invite);
+app.patch('/api/v1/campaigns/:id/groups/:groupId/invitations/me', groups.respond);
+const topicFile = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 9, fieldSize: 32000 },
+}).single('document');
+app.get('/api/v1/topic-archive', topics.archive);
+app.get('/api/v1/campaigns/:id/topics', topics.list);
+app.post('/api/v1/campaigns/:id/topics', topicFile, topics.submit);
+app.patch('/api/v1/campaigns/:id/topics/:topicId', topicFile, topics.submit);
+app.get('/api/v1/campaigns/:id/topics/:topicId/similar', topics.duplicates);
+app.get('/api/v1/campaigns/:id/topics/:topicId/document', topics.document);
+app.post('/api/v1/campaigns/:id/topics/:topicId/review', topics.review);
+app.get('/api/v1/campaigns/:id/wish-groups', wishes.listGroups);
+app.get('/api/v1/campaigns/:id/wish-groups/:groupId', wishes.groupResults);
+app.post('/api/v1/campaigns/:id/wish-groups/:groupId/registrations', wishes.registerWish);
+app.put('/api/v1/campaigns/:id/wish-groups/:groupId/registrations', wishes.replaceWishes);
+app.get('/api/v1/campaigns/:id/lecturer-wishes', wishes.lecturerWishes);
+app.get('/api/v1/campaigns/:id/matching-runs', matching.list);
+app.post('/api/v1/campaigns/:id/matching-runs', matching.preview);
+app.get('/api/v1/campaigns/:id/matching-runs/:runId', matching.detail);
+app.post('/api/v1/campaigns/:id/matching-runs/:runId/adjust', matching.adjust);
+app.post('/api/v1/campaigns/:id/matching-runs/:runId/publish', matching.publish);
+app.post('/api/v1/campaigns/:id/matching-offers/expire', matching.expire);
+app.patch('/api/v1/campaigns/:id/matching-offers/:offerId', matching.respond);
+app.put('/api/v1/campaigns/:id/topics/:topicId/adviser', topics.assignAdviser);
+app.put('/api/v1/campaigns/:id/lecturer-wishes/:registrationId/rank', wishes.rankApplicant);
 app.post('/api/v1/auth/sso/link', sso.link);
 for (const name of [
   'faculties',

@@ -1,5 +1,10 @@
 import { icon, pageIcons, enhanceUI } from './ui.js';
 import { sprint2Pages, renderSprint2, setupSprint2 } from './sprint2.js';
+import { renderWishes } from './wishes.js';
+import { renderMatching } from './matching.js';
+import { renderAcademic } from './academic.js';
+import { renderResults } from './results.js';
+import { renderThesisPrep } from './thesis-prep.js';
 import { extraPages, renderExtra, recoveryHTML, setupExtras } from './sprint1.js';
 const app = document.querySelector('#app');
 const notice = document.querySelector('#notice');
@@ -14,6 +19,16 @@ let editingMaster = null;
 let ssoProviders = [];
 const titles = {
   ...sprint2Pages,
+  wishes: ['Nguyện vọng đề tài', 'Đăng ký đề tài và theo dõi kết quả ghép cặp.'],
+  matching: ['Điều phối ghép cặp', 'Chạy thử, điều chỉnh và công bố kết quả.'],
+  'thesis-reports': ['Báo cáo đồ án', 'Nộp báo cáo, xem phản hồi và chấm theo rubric.'],
+  internships: ['Thực tập', 'Hồ sơ, nhật ký, báo cáo và đánh giá thực tập.'],
+  rubrics: ['Thư viện rubric', 'Tạo tiêu chí dùng chung và gắn vào từng đợt.'],
+  results: ['Tổng kết đợt', 'Theo dõi tiến độ, điểm và phúc khảo.'],
+  notifications: ['Thông báo', 'Xem cập nhật của bạn.'],
+  'thesis-groups': ['Nhóm đồ án', 'Lập nhóm, chọn hướng và xác nhận lời mời.'],
+  'thesis-topics': ['Đề tài đồ án', 'Đề xuất, duyệt và tra cứu đề tài trong đợt.'],
+  'topic-archive': ['Kho đề tài', 'Tìm đề tài theo năm, hướng và giảng viên.'],
   'training-systems': ['Hệ đào tạo', 'Quản lý các hệ đào tạo của trường.'],
   ...extraPages,
   faculties: ['Khoa', 'Quản lý đơn vị đào tạo trong phạm vi của bạn.'],
@@ -45,15 +60,32 @@ function navigation(currentPage) {
       ['faculties', 'departments', 'majors', 'specializations', 'training-systems'],
     ],
     ['KẾ HOẠCH & TÀI LIỆU', ['academic-years', 'semesters', 'campaigns', 'document-templates']],
-    ['CÁ NHÂN', ['profile', 'account']],
+    [
+      'ĐỀ TÀI',
+      ['thesis-groups', 'thesis-topics', 'wishes', 'matching', 'topic-archive', 'thesis-reports'],
+    ],
+    ['THỰC TẬP & ĐÁNH GIÁ', ['internships', 'rubrics', 'results']],
+    ['CÁ NHÂN', ['profile', 'notifications', 'account']],
   ];
   return groups
     .map(([label, keys]) => {
-      const visible = keys.filter(
-        (key) =>
-          !['users', 'bulk-import', 'audit'].includes(key) ||
-          session.active_role.role_code === 'SYSTEM_ADMIN',
-      );
+      const role = session.active_role.role_code;
+      const visible = keys.filter((key) => {
+        if (['wishes', 'thesis-reports'].includes(key))
+          return ['STUDENT', 'LECTURER'].includes(role);
+        if (['matching', 'rubrics', 'internships', 'results'].includes(key))
+          return (
+            (key === 'results' && role === 'STUDENT') ||
+            (key === 'internships' &&
+              ['STUDENT', 'LECTURER', 'ENTERPRISE_MENTOR'].includes(role)) ||
+            managers() ||
+            (role === 'FACULTY_MANAGER' &&
+              !session.active_role.department_id &&
+              !session.active_role.major_id)
+          );
+        if (key === 'thesis-groups') return role === 'STUDENT';
+        return !['users', 'bulk-import', 'audit'].includes(key) || role === 'SYSTEM_ADMIN';
+      });
       return visible.length
         ? '<div class="nav-group"><p class="nav-caption">' +
             label +
@@ -323,6 +355,43 @@ async function render() {
   const area = app.querySelector('#page-content');
   area.dataset.page = currentPage;
   try {
+    if (['results', 'notifications'].includes(currentPage)) {
+      await renderResults(currentPage, area, { api, request, esc, notify });
+      return;
+    }
+    if (['rubrics', 'thesis-reports', 'internships'].includes(currentPage)) {
+      await renderAcademic(currentPage, area, {
+        api,
+        request,
+        esc,
+        notify,
+        role: session.active_role.role_code,
+      });
+      return;
+    }
+    if (currentPage === 'matching') {
+      await renderMatching(area, { api, esc, notify, role: session.active_role.role_code });
+      return;
+    }
+    if (['thesis-groups', 'thesis-topics', 'topic-archive'].includes(currentPage)) {
+      await renderThesisPrep(currentPage, area, {
+        api,
+        request,
+        esc,
+        notify,
+        role: session.active_role.role_code,
+      });
+      return;
+    }
+    if (currentPage === 'wishes') {
+      await renderWishes(area, {
+        api,
+        esc,
+        notify,
+        role: session.active_role.role_code,
+      });
+      return;
+    }
     if (Object.hasOwn(sprint2Pages, currentPage) || currentPage === 'campaigns') {
       await renderSprint2(currentPage, area);
       return;
@@ -525,7 +594,7 @@ async function render() {
             : ''
         }
         <div class="table-wrap">
-          <table>
+          <table class="data-table">
             <caption class="small muted" hidden>
               Danh sách ${title}
             </caption>

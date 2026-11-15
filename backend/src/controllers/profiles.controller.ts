@@ -250,6 +250,7 @@ export const saveQuota = async (req: Request, res: Response) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    await client.query('SELECT id FROM campaigns WHERE id=$1 FOR UPDATE', [id]);
     await client.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [req.user!.sub]);
     await campaignAccess(req, id, false, client);
     const before = (
@@ -258,8 +259,20 @@ export const saveQuota = async (req: Request, res: Response) => {
         [id, req.user!.sub],
       )
     ).rows[0];
-    if (before && before.current_assigned_students > max) {
-      fail('Hạn mức không được thấp hơn số sinh viên đã nhận');
+    const {
+      rows: [used],
+    } = await client.query(
+      `SELECT (SELECT count(*) FROM thesis_assignments WHERE campaign_id=$1 AND supervisor_id=$2)
+         + (SELECT count(*) FROM matching_offers WHERE campaign_id=$1 AND supervisor_id=$2 AND status='PENDING') AS topics,
+         (SELECT count(*) FROM matching_offers o JOIN group_members m ON m.group_id=o.group_id
+          WHERE o.campaign_id=$1 AND o.supervisor_id=$2 AND o.status='PENDING' AND m.confirmation_status='CONFIRMED') AS reserved`,
+      [id, req.user!.sub],
+    );
+    if (
+      (before?.current_assigned_students ?? 0) + Number(used.reserved) > max ||
+      Number(used.topics) > topics
+    ) {
+      fail('Hạn mức không được thấp hơn số đã nhận và số đang chờ xác nhận');
     }
     await client.query(
       `INSERT INTO lecturer_quotas (campaign_id,lecturer_id,max_students,max_topics) VALUES ($1,$2,$3,$4) ON CONFLICT(campaign_id,lecturer_id) DO UPDATE SET max_students=EXCLUDED.max_students,max_topics=EXCLUDED.max_topics`,

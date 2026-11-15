@@ -5,11 +5,16 @@ import { campaignAccess, globalRole, integer, timestamp } from '../utils/campaig
 import { fail, text, uuid } from '../utils/validation';
 import { audit } from '../utils/audit';
 import { readExcel, template } from '../utils/excel';
+import { eligibilityPolicy, eligibilityReason } from '../utils/eligibility';
+import { requireUnpublished, resultState } from '../utils/result-lock';
 
 export const phases = [
+  'CAMPAIGN_ENROLLMENT',
   'TOPIC_SUBMISSION',
   'TOPIC_APPROVAL',
+  'DIRECTION_SELECTION',
   'WISH_REGISTRATION',
+  'MATCHING',
   'OUTLINE_SUBMISSION',
   'MIDTERM_REPORT_1',
   'MIDTERM_REPORT_2',
@@ -20,7 +25,13 @@ export const phases = [
   'CAMPAIGN_CLOSURE',
 ];
 
-const eligibilityHeaders = ['student_code', 'status', 'reason'];
+const eligibilityHeaders = [
+  'student_code',
+  'status',
+  'reason',
+  'verified_credits',
+  'prerequisite_met',
+];
 
 export const saveCampaign = async (req: Request, res: Response) => {
   const id = uuid(req.params.id, 'Đợt');
@@ -30,6 +41,7 @@ export const saveCampaign = async (req: Request, res: Response) => {
     await client.query('BEGIN');
     await client.query('SELECT id FROM campaigns WHERE id=$1 FOR UPDATE', [id]);
     const before = await campaignAccess(req, id, true, client);
+    await requireUnpublished(client, id);
     if (!['DRAFT', 'OPEN', 'IN_PROGRESS', 'DEFENSE', 'CLOSED', 'ARCHIVED'].includes(b.status)) {
       fail('Trạng thái đợt không hợp lệ');
     }
@@ -39,6 +51,8 @@ export const saveCampaign = async (req: Request, res: Response) => {
     if (typeof b.allow_student_propose_topic !== 'boolean') {
       fail('Cờ tự đề xuất không hợp lệ');
     }
+    if (b.allow_self_find_company !== undefined && typeof b.allow_self_find_company !== 'boolean')
+      fail('Cấu hình tự tìm nơi thực tập không hợp lệ');
     const training = b.training_system ? text(b.training_system, 'Hệ đào tạo', 50) : null;
     if (
       training &&
@@ -46,6 +60,7 @@ export const saveCampaign = async (req: Request, res: Response) => {
     ) {
       fail('Hệ đào tạo không tồn tại');
     }
+    const policy = eligibilityPolicy(b, before);
     const values = [
       text(b.code, 'Mã đợt', 50),
       text(b.name, 'Tên đợt'),
@@ -56,10 +71,15 @@ export const saveCampaign = async (req: Request, res: Response) => {
       integer(b.max_wish_choices, 'Số nguyện vọng', 1, 5),
       b.allow_student_propose_topic,
       id,
+      policy.enforce_min_credits,
+      policy.min_credits_required,
+      policy.prerequisite_note,
+      b.allow_self_find_company ?? before.allow_self_find_company ?? true,
     ];
     const after = (
       await client.query(
-        `UPDATE campaigns SET code=$1,name=$2,type=$3,status=$4,training_system=$5,max_students_per_topic=$6,max_wish_choices=$7,allow_student_propose_topic=$8,updated_at=NOW() WHERE id=$9 RETURNING *`,
+        `UPDATE campaigns SET code=$1,name=$2,type=$3,status=$4,training_system=$5,max_students_per_topic=$6,max_wish_choices=$7,allow_student_propose_topic=$8,
+         enforce_min_credits=$10,min_credits_required=$11,prerequisite_note=$12,allow_self_find_company=$13,updated_at=NOW() WHERE id=$9 RETURNING *`,
         values,
       )
     ).rows[0];
@@ -112,7 +132,11 @@ export const deleteCampaign = async (req: Request, res: Response) => {
   }
 };
 
-async function targetStudent(client: Pick<PoolClient, 'query'>, campaign: any, studentId: string) {
+export async function targetStudent(
+  client: Pick<PoolClient, 'query'>,
+  campaign: any,
+  studentId: string,
+) {
   const student = (
     await client.query(
       `SELECT p.*,d.faculty_id,m.training_system FROM student_profiles p JOIN majors m ON m.id=p.major_id JOIN departments d ON d.id=m.department_id JOIN users u ON u.id=p.user_id WHERE p.user_id=$1 AND u.is_active=true AND EXISTS(SELECT 1 FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=u.id AND r.code='STUDENT')`,
@@ -135,19 +159,22 @@ export const eligibilityTemplate = async (_req: Request, res: Response) => {
 };
 
 export const listEligibility = async (req: Request, res: Response) => {
-  await campaignAccess(req, req.params.id, true);
+  const campaign = await campaignAccess(req, req.params.id, true);
   res.json(
     (
       await pool.query(
         `SELECT e.*,u.code,u.full_name FROM campaign_eligible_students e JOIN users u ON u.id=e.student_id WHERE e.campaign_id=$1 ORDER BY u.code`,
         [req.params.id],
       )
-    ).rows,
+    ).rows.map((row) => ({
+      ...row,
+      eligibility_issue: row.status === 'ELIGIBLE' ? eligibilityReason(campaign, row) : null,
+    })),
   );
 };
 
 export const importEligibility = async (req: Request, res: Response) => {
-  const rows = await readExcel(req, eligibilityHeaders);
+  const rows = await readExcel(req, eligibilityHeaders, 2);
   const client = await pool.connect();
   const results: any[] = [];
   try {
@@ -156,6 +183,7 @@ export const importEligibility = async (req: Request, res: Response) => {
       uuid(req.params.id, 'Đợt'),
     ]);
     const campaign = await campaignAccess(req, req.params.id, true, client);
+    await requireUnpublished(client, campaign.id);
     const seen = new Set<string>();
     for (const row of rows) {
       await client.query('SAVEPOINT eligible_row');
@@ -177,19 +205,45 @@ export const importEligibility = async (req: Request, res: Response) => {
           fail('Mã sinh viên không tồn tại');
         }
         await targetStudent(client, campaign, student.id);
+        const verifiedCredits = v.verified_credits
+          ? integer(
+              /^\d+$/.test(v.verified_credits) ? Number(v.verified_credits) : NaN,
+              'Số tín chỉ đã xác minh',
+              0,
+              1000,
+            )
+          : null;
+        const prerequisiteMet = v.prerequisite_met?.toUpperCase();
+        if (prerequisiteMet && !['YES', 'NO'].includes(prerequisiteMet)) {
+          fail('prerequisite_met chỉ nhận YES hoặc NO');
+        }
+        const evidence = {
+          verified_credits: verifiedCredits,
+          verified_prerequisite: prerequisiteMet === 'YES' ? campaign.prerequisite_note : null,
+        };
+        if (v.status === 'ELIGIBLE') {
+          const issue = eligibilityReason(campaign, evidence);
+          if (issue) fail(issue);
+        }
         await client.query(
-          `INSERT INTO campaign_eligible_students (campaign_id,student_id,status,ineligible_reason,verified_by) VALUES ($1,$2,$3,$4,$5) ON CONFLICT(campaign_id,student_id) DO UPDATE SET status=EXCLUDED.status,ineligible_reason=EXCLUDED.ineligible_reason,verified_by=EXCLUDED.verified_by`,
+          `INSERT INTO campaign_eligible_students (campaign_id,student_id,status,ineligible_reason,verified_by,verified_credits,verified_prerequisite)
+           VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(campaign_id,student_id) DO UPDATE
+           SET status=EXCLUDED.status,ineligible_reason=EXCLUDED.ineligible_reason,verified_by=EXCLUDED.verified_by,
+               verified_credits=EXCLUDED.verified_credits,verified_prerequisite=EXCLUDED.verified_prerequisite`,
           [
             campaign.id,
             student.id,
             v.status,
             v.reason ? text(v.reason, 'Lý do', 2000) : null,
             req.user!.sub,
+            evidence.verified_credits,
+            evidence.verified_prerequisite,
           ],
         );
         await audit(client, req, 'SET_ELIGIBILITY', 'campaigns', campaign.id, null, {
           student_id: student.id,
           status: v.status,
+          ...evidence,
         });
         results.push({ row: row.row, code, status: 'saved', message: 'Đã lưu điều kiện' });
         await client.query('RELEASE SAVEPOINT eligible_row');
@@ -218,8 +272,8 @@ export const timeline = async (req: Request, res: Response) => {
   await campaignAccess(req, req.params.id);
   const milestones = (
     await pool.query(
-      'SELECT * FROM campaign_milestones WHERE campaign_id=$1 ORDER BY sequence_order,start_at',
-      [req.params.id],
+      'SELECT * FROM campaign_milestones WHERE campaign_id=$1 ORDER BY array_position($2::text[],phase::text),start_at',
+      [req.params.id, phases],
     )
   ).rows;
   const manage = globalRole(req) || req.user!.active_role === 'FACULTY_MANAGER';
@@ -236,9 +290,13 @@ export const saveMilestone = async (req: Request, res: Response) => {
   const b = req.body ?? {};
   const start = timestamp(b.start_at, 'Bắt đầu');
   const end = timestamp(b.end_at, 'Kết thúc');
+  const hardDeadline = b.hard_deadline_at
+    ? timestamp(b.hard_deadline_at, 'Hạn cuối nhận bài trễ')
+    : null;
   if (start >= end) {
     fail('Kết thúc phải sau bắt đầu');
   }
+  if (hardDeadline && hardDeadline < end) fail('Hạn cuối nhận bài trễ phải từ hạn nộp trở đi');
   if (!phases.includes(b.phase)) {
     fail('Giai đoạn không hợp lệ');
   }
@@ -252,6 +310,7 @@ export const saveMilestone = async (req: Request, res: Response) => {
       uuid(req.params.id, 'Đợt'),
     ]);
     const campaign = await campaignAccess(req, req.params.id, true, client);
+    await requireUnpublished(client, campaign.id);
     const before = (
       await client.query(
         'SELECT * FROM campaign_milestones WHERE campaign_id=$1 AND phase=$2 FOR UPDATE',
@@ -260,7 +319,11 @@ export const saveMilestone = async (req: Request, res: Response) => {
     ).rows[0];
     const after = (
       await client.query(
-        `INSERT INTO campaign_milestones (campaign_id,phase,title,start_at,end_at,sequence_order,is_locked_override) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(campaign_id,phase) DO UPDATE SET title=EXCLUDED.title,start_at=EXCLUDED.start_at,end_at=EXCLUDED.end_at,sequence_order=EXCLUDED.sequence_order,is_locked_override=EXCLUDED.is_locked_override RETURNING *`,
+        `INSERT INTO campaign_milestones (campaign_id,phase,title,start_at,end_at,sequence_order,is_locked_override,hard_deadline_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         ON CONFLICT(campaign_id,phase) DO UPDATE SET title=EXCLUDED.title,start_at=EXCLUDED.start_at,
+         end_at=EXCLUDED.end_at,sequence_order=EXCLUDED.sequence_order,is_locked_override=EXCLUDED.is_locked_override,
+         hard_deadline_at=EXCLUDED.hard_deadline_at RETURNING *`,
         [
           campaign.id,
           b.phase,
@@ -269,6 +332,7 @@ export const saveMilestone = async (req: Request, res: Response) => {
           end,
           phases.indexOf(b.phase),
           b.is_locked ? true : null,
+          b.hard_deadline_at === undefined ? (before?.hard_deadline_at ?? null) : hardDeadline,
         ],
       )
     ).rows[0];
@@ -294,6 +358,7 @@ export const grantOverride = async (req: Request, res: Response) => {
       uuid(req.params.id, 'Đợt'),
     ]);
     const campaign = await campaignAccess(req, req.params.id, true, client);
+    await requireUnpublished(client, campaign.id);
     await targetStudent(client, campaign, studentId);
     const milestone = (
       await client.query(
@@ -331,7 +396,8 @@ export const revokeOverride = async (req: Request, res: Response) => {
     await client.query('SELECT id FROM campaigns WHERE id=$1 FOR UPDATE', [
       uuid(req.params.id, 'Đợt'),
     ]);
-    await campaignAccess(req, req.params.id, true, client);
+    const campaign = await campaignAccess(req, req.params.id, true, client);
+    await requireUnpublished(client, campaign.id);
     const result = await client.query(
       `DELETE FROM timeline_overrides o USING campaign_milestones m WHERE o.id=$1 AND m.id=o.milestone_id AND m.campaign_id=$2 RETURNING o.*`,
       [uuid(req.params.overrideId, 'Ngoại lệ'), req.params.id],
@@ -375,12 +441,67 @@ export async function gateState(
     effective_end: null as string | null,
     registered: false,
   });
+  if ((await resultState(client, campaign.id))?.published_at) return locked('Đợt đã công bố điểm');
+  if (phase === 'MATCHING') {
+    if (
+      !['LECTURER', 'SYSTEM_ADMIN', 'TRAINING_DEPT', 'FACULTY_MANAGER'].includes(
+        req.user!.active_role,
+      )
+    ) {
+      return locked('Bạn không có quyền xử lý ở mốc ghép cặp');
+    }
+    if (campaign.type === 'INTERNSHIP' || !['OPEN', 'IN_PROGRESS'].includes(campaign.status)) {
+      return locked('Đợt không cho phép ghép đề tài');
+    }
+    const matching = (
+      await client.query(
+        "SELECT * FROM campaign_milestones WHERE campaign_id=$1 AND phase='MATCHING'",
+        [campaign.id],
+      )
+    ).rows[0];
+    if (!matching) return locked('Chưa cấu hình mốc ghép cặp');
+    if (matching.is_locked_override) return locked('Giai đoạn ghép cặp đang khóa');
+    if (now < new Date(matching.start_at)) return locked('Chưa đến giờ ghép cặp');
+    if (now >= new Date(matching.end_at)) return locked('Đã hết giờ ghép cặp');
+    const wish = (
+      await client.query(
+        `SELECT GREATEST(m.end_at, max(o.extended_until)) AS effective_end
+       FROM campaign_milestones m LEFT JOIN timeline_overrides o ON o.milestone_id=m.id
+       WHERE m.campaign_id=$1 AND m.phase='WISH_REGISTRATION' GROUP BY m.id`,
+        [campaign.id],
+      )
+    ).rows[0];
+    if (!wish || now < new Date(wish.effective_end)) {
+      return locked('Chỉ ghép cặp sau khi hết hạn nguyện vọng và các gia hạn');
+    }
+    return {
+      ...locked('Đang trong thời gian ghép cặp'),
+      allowed: true,
+      effective_end: new Date(matching.end_at).toISOString(),
+    };
+  }
   if (!['OPEN', 'IN_PROGRESS', 'DEFENSE'].includes(campaign.status)) {
     return locked('Đợt chưa mở hoặc đã đóng');
   }
   if (req.user!.active_role !== 'STUDENT') {
     return locked('Chuyển sang vai trò Sinh viên để đăng ký');
   }
+  if (
+    campaign.type === 'INTERNSHIP' &&
+    ['DIRECTION_SELECTION', 'WISH_REGISTRATION'].includes(phase)
+  ) {
+    return locked('Đợt thực tập không có nguyện vọng đề tài');
+  }
+  if (
+    phase === 'WISH_REGISTRATION' &&
+    (
+      await client.query(
+        "SELECT 1 FROM matching_offers WHERE campaign_id=$1 AND status='PENDING' LIMIT 1",
+        [campaign.id],
+      )
+    ).rowCount
+  )
+    return locked('Đợt đang chờ xác nhận kết quả ghép');
   try {
     await targetStudent(client, campaign, req.user!.sub);
   } catch {
@@ -388,19 +509,24 @@ export async function gateState(
   }
   const eligibility = (
     await client.query(
-      'SELECT status FROM campaign_eligible_students WHERE campaign_id=$1 AND student_id=$2',
+      'SELECT status,verified_credits,verified_prerequisite FROM campaign_eligible_students WHERE campaign_id=$1 AND student_id=$2',
       [campaign.id, req.user!.sub],
     )
   ).rows[0];
   if (eligibility?.status !== 'ELIGIBLE') {
     return locked('Bạn chưa có trong danh sách đủ điều kiện');
   }
+  const issue = eligibilityReason(campaign, eligibility);
+  if (issue) return locked(issue);
   if (phase === 'TOPIC_SUBMISSION' && !campaign.allow_student_propose_topic) {
     return locked('Đợt không cho phép sinh viên tự đề xuất');
   }
   const milestone = (
     await client.query(
-      `SELECT m.*,o.extended_until FROM campaign_milestones m LEFT JOIN timeline_overrides o ON o.milestone_id=m.id AND o.target_user_id=$2 WHERE m.campaign_id=$1 AND m.phase=$3`,
+      `SELECT m.*,o.extended_until FROM campaign_milestones m
+       LEFT JOIN timeline_overrides o ON o.milestone_id=m.id AND o.target_user_id=$2
+       WHERE m.campaign_id=$1 AND (m.phase=$3 OR ($3='CAMPAIGN_ENROLLMENT' AND m.phase='WISH_REGISTRATION'))
+       ORDER BY (m.phase=$3) DESC LIMIT 1`,
       [campaign.id, req.user!.sub, phase],
     )
   ).rows[0];
@@ -451,7 +577,7 @@ export const enroll = async (req: Request, res: Response) => {
     await client.query('SELECT id FROM campaigns WHERE id=$1 FOR UPDATE', [
       uuid(req.params.id, 'Đợt'),
     ]);
-    const state = await gateState(req, req.params.id, 'WISH_REGISTRATION', client);
+    const state = await gateState(req, req.params.id, 'CAMPAIGN_ENROLLMENT', client);
     if (!state.allowed) {
       fail(state.reason, 403);
     }

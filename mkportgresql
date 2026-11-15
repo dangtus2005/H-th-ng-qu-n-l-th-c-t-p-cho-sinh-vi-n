@@ -1,0 +1,9 @@
+-mk 
+root 
+
+demo.gv1@example.invalid
+Demo@123456
+
+
+
+ & 'C:\Program Files\Git\bin\bash.exe' 'backend/scripts/test-sprint3-api.sh 

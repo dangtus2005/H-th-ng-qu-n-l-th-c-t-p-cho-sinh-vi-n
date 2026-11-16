@@ -5,8 +5,8 @@
 Sau migration 007, có thể thực hiện luồng mà không cần tạo sẵn nhóm hoặc đề tài. Quản lý Khoa cấu hình một đợt đồ án, nhập danh sách sinh viên đủ điều kiện, mở đợt và thiết lập các mốc chọn hướng, giảng viên gửi đề tài, duyệt và đăng ký nguyện vọng. Cần có hai sinh viên đã được xác minh ở cùng đợt để thử mời thành viên.
 
 1. Sinh viên vào **Nhóm đồ án**, nhập tên và hướng. Trưởng nhóm mời bằng mã sinh viên. Người được mời vào cùng đợt và xác nhận. Hướng và số thành viên được chốt khi nhóm có nguyện vọng hoặc phân công.
-2. Giảng viên vào **Đề xuất & duyệt** hoặc **Đề tài đồ án**, nhập đề tài và có thể tải PDF tối đa 5 MB. Đề tài chờ Bộ môn hoặc Khoa duyệt; sinh viên chỉ xem danh sách đề tài đã duyệt.
-3. Bộ môn hoặc Khoa mở đề tài chờ duyệt. **Kiểm tra trùng** hiển thị tối đa năm tên tương tự trong bộ môn. Điểm so khớp từ trong tiêu đề có bỏ dấu tiếng Việt, dùng để rà soát. Bộ môn/Khoa có thể duyệt, yêu cầu sửa hoặc từ chối. Đề tài đã duyệt có thể tìm tại **Kho đề tài** theo năm bắt đầu, hướng và giảng viên.
+2. Giảng viên vào **Đề tài đồ án**, nhập đề tài và có thể tải PDF tối đa 5 MB. Sinh viên tự đề xuất nếu đợt cho phép. Nếu chưa chọn giảng viên, lưu nháp. Khi chọn giảng viên, đề xuất chuyển sang chờ duyệt.
+3. Giảng viên hướng dẫn/đồng hướng dẫn phụ trách, Admin, Đào tạo hoặc Bộ môn/Khoa trong phạm vi mở đề tài chờ duyệt. **Kiểm tra trùng** hiển thị tối đa năm tên tương tự trong bộ môn. Có thể **Duyệt** cuối cùng, yêu cầu sửa hoặc từ chối, không bắt buộc xác nhận hướng dẫn ở bước riêng. Người đề xuất không tự duyệt, kể cả có nhiều vai trò. Từ chối/yêu cầu sửa bắt buộc nhận xét; chỉ xử lý trong mốc duyệt đang mở. Đề tài đã duyệt có thể tìm tại **Kho đề tài** theo năm bắt đầu, hướng và giảng viên.
 4. Trưởng nhóm vào **Nguyện vọng đề tài**, gửi đề tài đã duyệt có giảng viên hướng dẫn. Ở phần **Sửa danh sách nguyện vọng**, đổi vị trí, sửa ghi chú hoặc bỏ nguyện vọng rồi lưu. Hết hạn thì hệ thống khóa sửa, kể cả yêu cầu từ tab đang mở trước đó.
 5. Khi bước sang mốc ghép cặp và đã hết thời hạn đăng ký, giảng viên vào **Nguyện vọng đề tài** và lưu thứ hạng ứng viên. Hạng 1 cao nhất và mỗi hạng chỉ dùng một lần trong cùng đề tài. Bỏ trống rồi lưu để xóa hạng.
 
@@ -25,22 +25,26 @@ Quản trị, Phòng Đào tạo và quản lý Khoa có quyền toàn bộ đ�
 - **So sánh:** Mỗi bản nháp lưu cấu hình, đầu vào, số nhóm chưa ghép và lý do, số/tỷ lệ trúng từng ưu tiên. Chỉ số cặp bất ổn ở Gale–Shapley đếm những cặp có thể đổi trực tiếp trong giới hạn còn lại, giữ nguyên cặp khóa. Với hạn mức giảng viên dùng chung giữa nhiều đề tài, đây là chỉ số chẩn đoán thực tế, không phải chứng nhận ổn định theo mô hình Gale–Shapley cổ điển. Tối ưu chính xác cộng độ hài lòng hai phía theo ưu tiên của nhóm và thứ hạng đề tài; hỗ trợ tối đa 25 nhóm và giới hạn số nhánh tìm kiếm.
 - **Công bố và xác nhận:** Quản lý công bố bản nháp mới nhất và đặt hạn xác nhận. Thành viên thấy kết quả sau công bố. Chỉ trưởng nhóm xác nhận hoặc từ chối. Khi xác nhận, hệ thống tạo phân công chính thức và cập nhật hạn mức trong cùng giao dịch.
 - **Vòng bổ sung:** Sau khi vòng trước đã được phản hồi hoặc quản lý chốt kết quả quá hạn, chạy thử tiếp để mở vòng mới cho nhóm và đề tài còn lại. Cặp đã xác nhận được giữ nguyên. Các cặp nhóm–đề tài đã bị từ chối hoặc hết hạn không được lặp lại.
+- **Đề tài tự đề xuất:** Nếu sinh viên đã lưu nháp mà chưa chọn giảng viên, quản lý Bộ môn/Khoa có thể phân công từ màn hình **Đề tài đồ án** trong mốc duyệt. Sau đó giảng viên phụ trách hoặc người quản lý có quyền được duyệt cuối cùng.
 
-| Phương thức | Đường dẫn dưới `/api/v1/campaigns/:id` | Nội dung                                                                                                             |
-| ----------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| GET         | `/wish-groups`                         | Nhóm của sinh viên trong đợt                                                                                         |
-| GET         | `/wish-groups/:groupId`                | Đề tài đã duyệt, trạng thái đăng ký, nguyện vọng và phân công của nhóm                                               |
-| POST        | `/wish-groups/:groupId/registrations`  | `topic_id`, `priority_order` (số nguyên), `student_note` (tùy chọn). HTTP 201 khi tạo, 200 khi gửi lại đúng nội dung |
-| GET         | `/lecturer-wishes`                     | Nguyện vọng vào các đề tài của giảng viên                                                                            |
-| PUT         | `/lecturer-wishes/:registrationId/rank`| Xếp hạng ứng viên cho đề tài giảng viên hướng dẫn |
-| GET, POST   | `/matching-runs`                      | Lịch sử, bản nháp mới nhất và chạy thử |
-| GET         | `/matching-runs/:runId`               | Đầu vào, cấu hình và kết quả của lần chạy |
-| POST        | `/matching-runs/:runId/adjust`        | Chỉnh tay, bỏ cặp, khóa, bỏ khóa |
-| POST        | `/matching-runs/:runId/publish`       | Công bố và đặt hạn xác nhận |
-| PATCH       | `/matching-offers/:offerId`           | Trưởng nhóm xác nhận hoặc từ chối |
-| POST        | `/matching-offers/expire`             | Chốt các lời mời quá hạn |
+| Phương thức | Đường dẫn dưới `/api/v1/campaigns/:id`  | Nội dung                                                                                                             |
+| ----------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| GET         | `/wish-groups`                          | Nhóm của sinh viên trong đợt                                                                                         |
+| GET         | `/wish-groups/:groupId`                 | Đề tài đã duyệt, trạng thái đăng ký, nguyện vọng và phân công của nhóm                                               |
+| POST        | `/wish-groups/:groupId/registrations`   | `topic_id`, `priority_order` (số nguyên), `student_note` (tùy chọn). HTTP 201 khi tạo, 200 khi gửi lại đúng nội dung |
+| GET         | `/lecturer-wishes`                      | Nguyện vọng vào các đề tài của giảng viên                                                                            |
+| PUT         | `/lecturer-wishes/:registrationId/rank` | Xếp hạng ứng viên cho đề tài giảng viên hướng dẫn                                                                    |
+| GET, POST   | `/matching-runs`                        | Lịch sử, bản nháp mới nhất và chạy thử                                                                               |
+| GET         | `/matching-runs/:runId`                 | Đầu vào, cấu hình và kết quả của lần chạy                                                                            |
+| POST        | `/matching-runs/:runId/adjust`          | Chỉnh tay, bỏ cặp, khóa, bỏ khóa                                                                                     |
+| POST        | `/matching-runs/:runId/publish`         | Công bố và đặt hạn xác nhận                                                                                          |
+| PATCH       | `/matching-offers/:offerId`             | Trưởng nhóm xác nhận hoặc từ chối                                                                                    |
+| POST        | `/matching-offers/expire`               | Chốt các lời mời quá hạn                                                                                             |
+| PUT         | `/topics/:topicId/adviser`              | Phân công hướng dẫn cho đề tài tự đề xuất chưa có giảng viên                                                         |
 
 ## Demo trên máy cá nhân
+
+Các bộ chọn đợt tại Đợt, Nhóm/Đề tài đồ án, Nguyện vọng, Ghép cặp, Báo cáo, Thực tập và Tổng kết hiển thị **Học kỳ · Năm học · Tên đợt**. Ví dụ: **Học kỳ 1 · 2026–2027 · Đợt đồ án**. Kỳ/năm học đặt trước để dễ nhận biết trên màn hình nhỏ, lấy từ liên kết học kỳ của đợt, không suy đoán từ ngày hiện tại; không lặp năm nếu tên học kỳ đã chứa năm học.
 
 1. Tại thư mục gốc, chạy `npm.cmd run migrate --prefix backend`, `node backend/scripts/seed-demo.cjs` rồi `npm.cmd run dev`. Chạy lại script nếu đã tạo dữ liệu mẫu để bổ sung mốc ghép cặp. Sao lưu CSDL trước khi chạy migration trên dữ liệu đang sử dụng.
 2. Đăng nhập `demo.sv1@example.invalid` với mật khẩu mẫu `Demo@123456`. Vào **Nguyện vọng đề tài**, chọn **Đợt đồ án đang mở (mẫu)**, chọn đề tài và gửi ưu tiên 1. Gửi đề tài thứ hai ở ưu tiên 2 để thấy cách hệ thống xử lý nguyện vọng còn lại.
@@ -55,3 +59,9 @@ Nếu đợt mẫu đã hết thời gian do được tạo từ trước, vào 
 - Một đề tài nhận một nhóm. Số thành viên đã xác nhận không vượt giới hạn nhỏ hơn giữa cấu hình đợt và đề tài. Đề tài do giảng viên đề xuất có người hướng dẫn ngay từ đầu. Nguyện vọng gửi được khi đề tài đã duyệt và có người hướng dẫn.
 - Mốc **Đăng ký tham gia đợt**, **Chọn hướng đề tài**, **Đăng ký nguyện vọng** và **Ghép cặp đề tài** có cấu hình riêng. Đợt cũ chưa khai báo mốc tham gia tiếp tục dùng mốc nguyện vọng cho đăng ký tham gia. Ghép cặp chỉ mở khi hết hạn nguyện vọng, kể cả gia hạn đang lưu, và đang trong mốc ghép.
 - Trong **Đợt → Sửa cấu hình**, Khoa có thể bật ngưỡng tín chỉ bằng cách điền số tín chỉ tối thiểu và mô tả điều kiện tiên quyết. Khi nhập danh sách, Khoa điền `verified_credits` từ số liệu chính thức và `prerequisite_met=YES` sau khi xác minh đạt yêu cầu. Hồ sơ cũ vẫn được giữ. Nếu áp dụng tiêu chí mới, danh sách đánh dấu dòng cần xác minh lại và hệ thống chặn đăng ký cho tới khi có dữ liệu phù hợp.
+
+## Kiểm thử
+
+- `npm run test:sprint3 --prefix backend`: chạy cả kiểm thử API cũ và luồng API mà giao diện đang dùng: sinh viên gửi, giảng viên duyệt cuối, yêu cầu sửa/gửi lại, cảnh báo trùng, kho lịch sử, nguyện vọng, xếp hạng, ghép cặp, công bố, xác nhận/từ chối và vòng bổ sung. Kiểm tra phân công không bị tạo hai lần, hạn mức giảng viên và quyền truy cập.
+- Sau build, chạy `node backend/tests/sprint3-topics.cjs --browser` trong môi trường có Puppeteer và Chrome để kiểm tra sinh viên nhập/gửi, giảng viên bấm Duyệt, sinh viên xem kết quả, nhãn học kỳ/năm học và bố cục 375/1440px. Puppeteer không phải dependency của ứng dụng.
+- Các bài kiểm thử dùng database phát triển từ `backend/.env`, tạo fixture có tiền tố ngẫu nhiên rồi dọn trong `finally`; không duyệt thay đề tài đang sử dụng.

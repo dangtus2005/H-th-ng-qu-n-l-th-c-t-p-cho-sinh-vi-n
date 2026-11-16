@@ -1,3 +1,5 @@
+import { campaignLabel } from './ui.js';
+
 const labels = {
   OUTLINE_SUBMISSION: 'Đề cương',
   MIDTERM_REPORT_1: 'Báo cáo giữa kỳ 1',
@@ -50,7 +52,7 @@ export async function renderResults(page, area, { api, request, esc, notify }) {
       panel(
         'Đợt đang xem',
         `<div class="panel-body"><label>Đợt<select data-result-campaign>
-      ${campaigns.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select></label></div>`,
+      ${campaigns.map((c) => `<option value="${esc(c.id)}">${esc(campaignLabel(c))}</option>`).join('')}</select></label></div>`,
       ) + '<div data-result-content aria-live="polite"></div>';
     campaign = area.querySelector('[data-result-campaign]');
     output = area.querySelector('[data-result-content]');

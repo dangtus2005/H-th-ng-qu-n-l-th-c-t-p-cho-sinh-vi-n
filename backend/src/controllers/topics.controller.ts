@@ -5,6 +5,7 @@ import { audit } from '../utils/audit';
 import { globalRole, integer } from '../utils/campaign-access';
 import { requireStaffPhase, thesisCampaign, thesisWrite } from '../utils/thesis-campaign';
 import { fail, text, uuid } from '../utils/validation';
+import { gateState } from './campaigns.controller';
 
 const reviewer = (req: Request) =>
   globalRole(req) || ['FACULTY_MANAGER', 'DEPT_HEAD'].includes(req.user!.active_role);
@@ -19,12 +20,31 @@ function mayReview(req: Request, department: string) {
   );
 }
 
+function isAdviser(req: Request, topic: any) {
+  return (
+    req.user!.active_role === 'LECTURER' &&
+    [topic.supervisor_id, topic.co_supervisor_id].includes(req.user!.sub) &&
+    (!req.user!.scope.department_id || req.user!.scope.department_id === topic.department_id)
+  );
+}
+
+function mayReviewTopic(req: Request, topic: any) {
+  return (
+    topic.proposed_by_id !== req.user!.sub &&
+    (mayReview(req, topic.department_id) || isAdviser(req, topic))
+  );
+}
+
 async function authorDepartment(req: Request, db: PoolClient, campaign: any) {
-  if (req.user!.active_role !== 'LECTURER') fail('Chỉ giảng viên được đề xuất đề tài', 403);
+  const role = req.user!.active_role;
+  if (!['STUDENT', 'LECTURER'].includes(role))
+    fail('Chỉ sinh viên và giảng viên được đề xuất', 403);
   const department =
     (
       await db.query(
-        'SELECT department_id FROM lecturer_profiles WHERE user_id=$1',
+        role === 'STUDENT'
+          ? 'SELECT m.department_id FROM student_profiles p JOIN majors m ON m.id=p.major_id WHERE p.user_id=$1'
+          : 'SELECT department_id FROM lecturer_profiles WHERE user_id=$1',
         [req.user!.sub],
       )
     ).rows[0]?.department_id ?? req.user!.scope.department_id;
@@ -42,7 +62,12 @@ async function authorDepartment(req: Request, db: PoolClient, campaign: any) {
   ) {
     fail('Bạn chưa có bộ môn phù hợp với đợt', 403);
   }
-  await requireStaffPhase(db, campaign, 'TOPIC_SUBMISSION');
+  if (role === 'STUDENT') {
+    const gate = await gateState(req, campaign.id, 'TOPIC_SUBMISSION', db);
+    if (!gate.allowed) fail(gate.reason, 403);
+  } else {
+    await requireStaffPhase(db, campaign, 'TOPIC_SUBMISSION');
+  }
   return department as string;
 }
 
@@ -142,15 +167,13 @@ export const list = async (req: Request, res: Response) => {
         ORDER BY l.created_at DESC,l.id DESC LIMIT 1) AS feedback
      FROM topics t LEFT JOIN users u ON u.id=t.supervisor_id JOIN users a ON a.id=t.proposed_by_id
      WHERE t.campaign_id=$1 AND ($2::uuid IS NULL OR t.department_id=$2)
-       AND (t.status IN ('APPROVED','ASSIGNED')
-            OR ($5::boolean AND (t.proposed_by_id=$3 OR t.supervisor_id=$3)) OR $4::boolean)
+       AND (t.status IN ('APPROVED','ASSIGNED') OR t.proposed_by_id=$3 OR t.supervisor_id=$3 OR t.co_supervisor_id=$3 OR $4::boolean)
      ORDER BY t.updated_at DESC NULLS LAST,t.id`,
     [
       campaign.id,
       globalRole(req) ? null : scope.department_id,
       req.user!.sub,
       reviewer(req) && (role !== 'DEPT_HEAD' || !!scope.department_id),
-      role !== 'STUDENT',
     ],
   );
   const phases = (
@@ -164,7 +187,21 @@ export const list = async (req: Request, res: Response) => {
   const open = ['OPEN', 'IN_PROGRESS'].includes(campaign.status);
   const phaseOpen = (phase: string) =>
     open && Boolean(phases.find((p) => p.phase === phase)?.allowed);
-  const canSubmit = role === 'LECTURER' && phaseOpen('TOPIC_SUBMISSION');
+  let canSubmit = role === 'LECTURER' && phaseOpen('TOPIC_SUBMISSION');
+  let advisers: any[] = [];
+  if (role === 'STUDENT') {
+    const gate = await gateState(req, campaign.id, 'TOPIC_SUBMISSION');
+    canSubmit = open && gate.allowed;
+    if (canSubmit) {
+      const department = (
+        await pool.query(
+          'SELECT m.department_id FROM student_profiles p JOIN majors m ON m.id=p.major_id WHERE p.user_id=$1',
+          [req.user!.sub],
+        )
+      ).rows[0]?.department_id;
+      if (department) advisers = await permittedAdviser(pool, campaign, department);
+    }
+  }
   const assignable = rows.filter(
     (t) =>
       t.source === 'STUDENT_PROPOSED' &&
@@ -179,6 +216,7 @@ export const list = async (req: Request, res: Response) => {
   }
   res.json({
     can_submit: canSubmit,
+    advisers,
     max_students: campaign.max_students_per_topic ?? 2,
     topics: rows.map((t) => ({
       ...t,
@@ -193,20 +231,16 @@ export const list = async (req: Request, res: Response) => {
         !t.supervisor_endorsed_at,
       can_adviser_review:
         phaseOpen('TOPIC_APPROVAL') &&
-        role === 'LECTURER' &&
-        t.supervisor_id === req.user!.sub &&
-        t.source === 'STUDENT_PROPOSED' &&
+        isAdviser(req, t) &&
+        t.proposed_by_id !== req.user!.sub &&
         t.status === 'PENDING_APPROVAL',
       can_review:
-        phaseOpen('TOPIC_APPROVAL') &&
-        mayReview(req, t.department_id) &&
-        t.status === 'PENDING_APPROVAL',
+        phaseOpen('TOPIC_APPROVAL') && mayReviewTopic(req, t) && t.status === 'PENDING_APPROVAL',
     })),
   });
 };
 
 export const submit = async (req: Request, res: Response) => {
-  if (req.user!.active_role !== 'LECTURER') fail('Chỉ giảng viên được đề xuất đề tài', 403);
   const id = req.params.topicId ? uuid(req.params.topicId, 'Đề tài') : null;
   const fields = topicFields(req);
   const file = req.file;
@@ -221,8 +255,21 @@ export const submit = async (req: Request, res: Response) => {
     if (!['OPEN', 'IN_PROGRESS'].includes(campaign.status)) fail('Đợt chưa mở hoặc đã đóng', 403);
     if (fields.max_students > (campaign.max_students_per_topic ?? 2))
       fail('Số sinh viên vượt giới hạn của đợt');
-    const supervisor = req.user!.sub;
-    const status = 'PENDING_APPROVAL';
+    const student = req.user!.active_role === 'STUDENT';
+    const requestedAdviser = req.body?.supervisor_id;
+    const supervisor = student
+      ? requestedAdviser
+        ? uuid(requestedAdviser, 'Giảng viên hướng dẫn')
+        : null
+      : req.user!.sub;
+    if (
+      student &&
+      supervisor &&
+      !(await permittedAdviser(db, campaign, department, supervisor)).length
+    ) {
+      fail('Giảng viên hướng dẫn không thuộc bộ môn hoặc đợt', 403);
+    }
+    const status = supervisor ? 'PENDING_APPROVAL' : 'DRAFT';
     const previous = id
       ? (
           await db.query(
@@ -235,7 +282,7 @@ export const submit = async (req: Request, res: Response) => {
     if (
       previous &&
       (previous.department_id !== department ||
-        previous.source !== 'LECTURER_PROPOSED')
+        previous.source !== (student ? 'STUDENT_PROPOSED' : 'LECTURER_PROPOSED'))
     ) {
       fail('Đề tài không thuộc vai trò hoặc bộ môn đang sử dụng', 403);
     }
@@ -270,7 +317,7 @@ export const submit = async (req: Request, res: Response) => {
             campaign.id,
             department,
             req.user!.sub,
-            'LECTURER_PROPOSED',
+            student ? 'STUDENT_PROPOSED' : 'LECTURER_PROPOSED',
           ],
         );
     if (file)
@@ -298,7 +345,7 @@ async function privateTopic(req: Request) {
       topic.department_id !== req.user!.scope.department_id) ||
     (!publicStatuses.includes(topic.status) &&
       !mayReview(req, topic.department_id) &&
-      ![topic.supervisor_id, topic.proposed_by_id].includes(req.user!.sub))
+      ![topic.supervisor_id, topic.co_supervisor_id, topic.proposed_by_id].includes(req.user!.sub))
   )
     fail('Không tìm thấy đề tài', 404);
   return topic;
@@ -306,7 +353,7 @@ async function privateTopic(req: Request) {
 
 export const duplicates = async (req: Request, res: Response) => {
   const topic = await privateTopic(req);
-  if (!mayReview(req, topic.department_id)) fail('Chỉ Bộ môn hoặc Khoa có quyền rà soát', 403);
+  if (!mayReviewTopic(req, topic)) fail('Chỉ người có quyền duyệt đề tài được rà soát', 403);
   res.json(await similar(pool, topic));
 };
 
@@ -342,16 +389,8 @@ export const review = async (req: Request, res: Response) => {
       campaign.id,
     ]);
     if (!topic) fail('Không tìm thấy đề tài', 404);
-    const adviser =
-      req.user!.active_role === 'LECTURER' &&
-      topic.source === 'STUDENT_PROPOSED' &&
-      topic.supervisor_id === req.user!.sub;
-    if (
-      !(decision === 'endorse'
-        ? adviser
-        : mayReview(req, topic.department_id) ||
-          (adviser && ['revise', 'reject'].includes(decision)))
-    ) {
+    const adviser = isAdviser(req, topic);
+    if (!(decision === 'endorse' ? adviser : mayReviewTopic(req, topic))) {
       fail('Bạn không có quyền xử lý đề tài này', 403);
     }
     if (topic.proposed_by_id === req.user!.sub) fail('Người đề xuất không tự duyệt đề tài', 403);
@@ -367,13 +406,6 @@ export const review = async (req: Request, res: Response) => {
         )
       ).rows[0];
     } else {
-      if (
-        decision === 'approve' &&
-        topic.source === 'STUDENT_PROPOSED' &&
-        !topic.supervisor_endorsed_at
-      ) {
-        fail('Đề tài sinh viên cần giảng viên xác nhận trước khi duyệt', 409);
-      }
       const matches = await similar(db, topic);
       next = (
         await db.query(

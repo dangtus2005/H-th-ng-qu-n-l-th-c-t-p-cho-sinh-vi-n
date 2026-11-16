@@ -1,3 +1,5 @@
+import { campaignLabel } from './ui.js';
+
 const algorithmNames = {
   GALE_SHAPLEY_GROUP: 'Gale–Shapley · nhóm đề xuất',
   GALE_SHAPLEY_TOPIC: 'Gale–Shapley · đề tài đề xuất',
@@ -47,7 +49,7 @@ export async function renderMatching(area, { api, esc, notify, role }) {
     panel(
       'Đợt ghép cặp',
       `<div class="panel-body"><label>Đợt đang xem
-    <select data-match-campaign>${campaigns.map((c) => option(c.id, c.name)).join('')}</select></label></div>`,
+    <select data-match-campaign>${campaigns.map((c) => option(c.id, campaignLabel(c))).join('')}</select></label></div>`,
     ) + '<div data-match-content aria-live="polite"></div>';
   const campaign = area.querySelector('[data-match-campaign]');
   const output = area.querySelector('[data-match-content]');

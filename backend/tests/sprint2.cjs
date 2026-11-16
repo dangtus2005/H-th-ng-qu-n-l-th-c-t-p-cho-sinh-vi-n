@@ -267,6 +267,7 @@ async function run() {
     training_system: 'CHINH_QUY',
     max_students_per_topic: 2,
     max_wish_choices: 3,
+    allow_student_propose_topic: false,
   };
   const campaign = await call('/master-data/campaigns', faculty.token, body, 201);
   const id = campaign.id;

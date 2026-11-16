@@ -1,3 +1,14 @@
+export function campaignLabel(campaign) {
+  const semester = campaign.semester_name || '';
+  const year =
+    campaign.academic_year_start &&
+    campaign.academic_year_end &&
+    !semester.includes(String(campaign.academic_year_start))
+      ? `${campaign.academic_year_start}–${campaign.academic_year_end}`
+      : '';
+  return [semester, year, campaign.name].filter(Boolean).join(' · ');
+}
+
 const paths = {
   school: '<path d="m3 9 9-6 9 6-9 6-9-6Z"/><path d="M6 11v6l6 4 6-4v-6M21 9v7"/>',
   users:

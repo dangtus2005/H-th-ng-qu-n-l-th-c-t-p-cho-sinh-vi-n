@@ -1,4 +1,4 @@
-# Dữ liệu mẫu Sprint 1–2
+# Dữ liệu mẫu Sprint 1–3 và báo cáo đồ án
 
 Chạy ở thư mục gốc: `node backend/scripts/seed-demo.cjs`.
 
@@ -20,6 +20,31 @@ Mật khẩu chung của các tài khoản mẫu: `Demo@123456`.
 | Quản lý Khoa | demo.khoa1@example.invalid, demo.khoa2@example.invalid, demo.khoa3@example.invalid       |
 
 Email dùng miền example.invalid để tránh nhầm với người thật. Đây là dữ liệu trình diễn, không dùng tài khoản mẫu trên hệ thống công khai.
+
+## Nhóm, đề tài và báo cáo cho tài khoản sinh viên hiện có
+
+Chạy từ thư mục gốc: `node backend/scripts/seed-student-thesis.cjs`.
+
+Script dùng các tài khoản đã có, không tạo tài khoản mới hay đổi mật khẩu/quyền. Cần có đợt `DEMO_S3_KTPM` đang mở và các tài khoản `SV001`, `SV_DEMO01`, `GV001`, `GV_DEMO01`, `ADMIN01` thuộc đúng phạm vi. Dữ liệu được ghi trong một transaction; chạy lại không nhân đôi hoặc đặt lại báo cáo, phản hồi, kết quả duyệt hay hạn mức đã cập nhật.
+
+| Tài khoản sinh viên                         | Nhóm                       | Đề tài                                          | Giảng viên                     |
+| ------------------------------------------- | -------------------------- | ----------------------------------------------- | ------------------------------ |
+| `225101001@sv.uni.edu.vn` (`SV001`)         | Nhóm đồ án SV001 (mẫu)     | Hệ thống quản lý học tập và tiến độ đồ án (mẫu) | `GV001` — TS. Nguyễn Văn Trung |
+| `sinhvien.demo@sv.uni.edu.vn` (`SV_DEMO01`) | Nhóm đồ án SV_DEMO01 (mẫu) | Ứng dụng quản lý thư viện trực tuyến (mẫu)      | `GV_DEMO01` — Giảng viên Demo  |
+
+Mỗi sinh viên là trưởng nhóm riêng và đã được xác nhận thành viên. Mỗi nhóm có phân công đang thực hiện và ba báo cáo PDF tải được:
+
+- Đề cương bản 1: phản hồi mẫu yêu cầu bổ sung sơ đồ dữ liệu và kế hoạch kiểm thử.
+- Đề cương bản 2: phản hồi mẫu đã đạt yêu cầu.
+- Báo cáo giữa kỳ lần 1, bản 1: nhận xét mẫu để tiếp tục hoàn thiện sản phẩm.
+
+Đăng nhập bằng mật khẩu hiện tại, chọn đợt có nhãn **Học kỳ 1 (2026–2027) · Sprint 3 – Duyệt đề tài KTPM (mẫu)**:
+
+1. **Nhóm đồ án** (`/#thesis-groups`): xem nhóm, thành viên, trưởng nhóm và hướng đề tài.
+2. **Đề tài đồ án** (`/#thesis-topics`): xem đề tài ở trạng thái đã phân công.
+3. **Báo cáo đồ án** (`/#thesis-reports`): chọn nhóm/đề tài, mở các phiên bản để xem nhận xét hoặc tải PDF; có thể nộp thêm phiên bản mới.
+
+Script thêm các mốc đề cương, giữa kỳ 1/2 và cuối kỳ mở 30 ngày từ lần tạo nếu chưa có mốc tương ứng; không ghi đè mốc đã cấu hình. Mốc chọn hướng cũng được thêm nếu thiếu. Các nhóm đã phân công sẽ khóa thay đổi thành viên/hướng và không đăng ký nguyện vọng mới trong cùng đợt. Không tạo điểm giả hoặc công bố kết quả. Các phản hồi mẫu đều có tiền tố “Dữ liệu mẫu”.
 
 ## Nội dung và giới hạn
 

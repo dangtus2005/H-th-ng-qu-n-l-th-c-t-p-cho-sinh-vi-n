@@ -1,3 +1,5 @@
+import { campaignLabel } from './ui.js';
+
 const targetLabels = {
   THESIS_SUPERVISOR: 'Giảng viên hướng dẫn đồ án',
   INTERNSHIP_LECTURER: 'Giảng viên thực tập',
@@ -103,7 +105,7 @@ export async function renderAcademic(page, area, { api, request, esc, notify, ro
     panel(
       'Đợt đang xem',
       `<div class="panel-body"><label>Đợt<select data-academic-campaign>
-    ${campaigns.map((c) => opt(c.id, c.name)).join('')}</select></label></div>`,
+    ${campaigns.map((c) => opt(c.id, campaignLabel(c))).join('')}</select></label></div>`,
     ) + '<div data-academic-content aria-live="polite"></div>';
   const campaign = area.querySelector('[data-academic-campaign]');
   const output = area.querySelector('[data-academic-content]');

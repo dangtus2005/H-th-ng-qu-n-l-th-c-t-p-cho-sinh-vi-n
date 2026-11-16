@@ -68,13 +68,7 @@ async function createUser(suffix, roleSpecs) {
     assert.equal(result.rowCount, 1, `Missing role ${role.code}`);
     roleIds[role.code] = result.rows[0].id;
   }
-  const login = await call(
-    '/auth/login',
-    null,
-    { email, password },
-    200,
-    'POST',
-  );
+  const login = await call('/auth/login', null, { email, password }, 200, 'POST');
   return { id, token: login.access_token, login, roleIds };
 }
 
@@ -89,8 +83,7 @@ const topicBody = (title) => ({
   max_students: 2,
 });
 
-const topicRoute = (suffix = '') =>
-  `/topic-workflow/campaigns/${ids.campaign}/topics${suffix}`;
+const topicRoute = (suffix = '') => `/topic-workflow/campaigns/${ids.campaign}/topics${suffix}`;
 
 async function setMilestone(phase, startAt, endAt, locked = null) {
   await pool.query(
@@ -134,14 +127,14 @@ async function seed() {
       'Sprint 3 other major',
     ],
   );
-  await pool.query('INSERT INTO academic_years (id,code,start_year,end_year) VALUES ($1,$2,2092,2093)', [
-    ids.academicYear,
-    prefix,
-  ]);
+  await pool.query(
+    'INSERT INTO academic_years (id,code,start_year,end_year) VALUES ($1,$2,2092,2093)',
+    [ids.academicYear, prefix],
+  );
   await pool.query(
     `INSERT INTO semesters
       (id,academic_year_id,code,name,start_date,end_date,is_current)
-     VALUES ($1,$2,$3,'Sprint 3 test semester','2092-01-01','2092-06-01',false)`,
+     VALUES ($1,$2,$3,'Học kỳ 1','2092-01-01','2092-06-01',false)`,
     [ids.semester, ids.academicYear, prefix],
   );
   await pool.query(
@@ -277,6 +270,12 @@ async function cleanup() {
     'DELETE FROM audit_logs WHERE actor_id=ANY($1::uuid[]) OR entity_id=ANY($2::uuid[])',
     [users, topics],
   );
+  await pool.query('DELETE FROM notifications WHERE recipient_id=ANY($1::uuid[])', [users]);
+  await pool.query('DELETE FROM matching_offers WHERE campaign_id=$1', [ids.campaign]);
+  await pool.query('DELETE FROM thesis_assignments WHERE campaign_id=$1', [ids.campaign]);
+  await pool.query('DELETE FROM matching_runs WHERE campaign_id=$1', [ids.campaign]);
+  await pool.query('DELETE FROM topic_registrations WHERE campaign_id=$1', [ids.campaign]);
+  await pool.query('DELETE FROM student_groups WHERE campaign_id=$1', [ids.campaign]);
   await pool.query('DELETE FROM topics WHERE campaign_id=$1', [ids.campaign]);
   await pool.query('DELETE FROM user_roles WHERE user_id=ANY($1::uuid[])', [users]);
   await pool.query('DELETE FROM auth_sessions WHERE user_id=ANY($1::uuid[])', [users]);
@@ -311,12 +310,29 @@ async function run() {
 
   await call(topicRoute(), null, null, 401);
   await call(topicRoute(), student.token, topicBody('Student proposal'), 403);
-  await call(`/campaigns/${ids.campaign}/topics`, student.token, topicBody('Student proposal'), 403);
-  check(
-    (await call(`/campaigns/${ids.campaign}/gate?phase=TOPIC_SUBMISSION`, student.token, null)).allowed,
-    false,
-    'Students cannot submit topics',
+  await pool.query('UPDATE campaigns SET allow_student_propose_topic=false WHERE id=$1', [
+    ids.campaign,
+  ]);
+  await call(
+    `/campaigns/${ids.campaign}/topics`,
+    student.token,
+    {
+      ...topicBody('Student proposal'),
+      required_skills: 'PostgreSQL',
+      technologies: 'Node.js',
+      supervisor_id: lecturer.id,
+    },
+    403,
   );
+  check(
+    (await call(`/campaigns/${ids.campaign}/gate?phase=TOPIC_SUBMISSION`, student.token, null))
+      .allowed,
+    false,
+    'Students cannot submit when the campaign disables proposals',
+  );
+  await pool.query('UPDATE campaigns SET allow_student_propose_topic=true WHERE id=$1', [
+    ids.campaign,
+  ]);
   await call(topicRoute(), otherLecturer.token, topicBody('Out-of-scope proposal'), 403);
   await call(topicRoute(), lecturer.token, { ...topicBody('Invalid proposal'), title_vi: '' }, 400);
 
@@ -339,7 +355,12 @@ async function run() {
   topics.push(third.id);
   const fourth = await call(topicRoute(), lecturer.token, topicBody('Đề tài quản trị'), 201);
   topics.push(fourth.id);
-  const fifth = await call(topicRoute(), lecturer.token, topicBody('Đề tài ngoài cửa sổ duyệt'), 201);
+  const fifth = await call(
+    topicRoute(),
+    lecturer.token,
+    topicBody('Đề tài ngoài cửa sổ duyệt'),
+    201,
+  );
   topics.push(fifth.id);
 
   const pendingForHead = await call(topicRoute('/pending'), departmentHead.token, null);
@@ -366,7 +387,9 @@ async function run() {
     200,
   );
   check(
-    (await call(topicRoute('/pending'), switched.access_token, null)).map((topic) => topic.id).sort(),
+    (await call(topicRoute('/pending'), switched.access_token, null))
+      .map((topic) => topic.id)
+      .sort(),
     [],
     'Authors do not see their own submissions in the review queue',
   );
@@ -470,12 +493,7 @@ async function run() {
     [fifth.id],
     'Review queue contains only pending proposals',
   );
-  await call(
-    `/topic-workflow/campaigns/${randomUUID()}/topics`,
-    student.token,
-    null,
-    404,
-  );
+  await call(`/topic-workflow/campaigns/${randomUUID()}/topics`, student.token, null, 404);
   const history = await pool.query(
     'SELECT previous_status,new_status,feedback_comment FROM topic_approval_logs WHERE topic_id=$1',
     [second.id],
@@ -486,14 +504,285 @@ async function run() {
   check(history.rows[0].feedback_comment, 'Cần thu hẹp phạm vi đề tài.');
   check(
     (
-      await pool.query('SELECT count(*)::int AS count FROM topic_approval_logs WHERE topic_id=ANY($1::uuid[])', [
-        [first.id, third.id, fourth.id],
-      ])
+      await pool.query(
+        'SELECT count(*)::int AS count FROM topic_approval_logs WHERE topic_id=ANY($1::uuid[])',
+        [[first.id, third.id, fourth.id]],
+      )
     ).rows[0].count,
     3,
     'Each approval is logged',
   );
+  lecturer.token = (
+    await call('/auth/switch-role', switched.access_token, {
+      user_role_id: lecturer.roleIds.LECTURER,
+    })
+  ).access_token;
+  await completeWorkflow(fixtures);
+  if (process.argv.includes('--browser')) {
+    await require('./sprint3-ui.cjs')({ base, campaignId: ids.campaign, student, lecturer });
+  }
   console.log(`Sprint 3 topic workflow: ${assertions} assertions passed`);
+}
+
+async function completeWorkflow({ lecturer, student, ineligibleStudent: second, admin }) {
+  const root = `/campaigns/${ids.campaign}`;
+  const topicPath = root + '/topics';
+  const start = new Date(Date.now() - 3600000);
+  const end = new Date(Date.now() + 3600000);
+  await setMilestone('TOPIC_APPROVAL', start, end);
+  for (const phase of ['DIRECTION_SELECTION', 'WISH_REGISTRATION', 'MATCHING']) {
+    await pool.query(
+      'INSERT INTO campaign_milestones(campaign_id,phase,title,start_at,end_at,sequence_order) VALUES ($1,$2::milestone_phase_enum,$2::text,$3,$4,3)',
+      [ids.campaign, phase, start, end],
+    );
+  }
+  const colleague = await createUser('_colleague', [
+    { code: 'LECTURER', facultyId: ids.faculty, departmentId: ids.department, isDefault: true },
+  ]);
+  const proposal = (title) => ({
+    title_vi: title,
+    description: 'Phần mềm quản lý sách và mượn trả.',
+    research_field: 'Thư viện',
+    max_students: 2,
+    required_skills: 'SQL',
+    technologies: 'Node.js',
+    supervisor_id: lecturer.id,
+  });
+  await call(topicPath, second.token, proposal('Chưa đủ điều kiện'), 403);
+  await pool.query(
+    "UPDATE campaign_eligible_students SET status='ELIGIBLE' WHERE campaign_id=$1 AND student_id=$2",
+    [ids.campaign, second.id],
+  );
+  const first = await call(topicPath, student.token, proposal('Ứng dụng thư viện thông minh'), 201);
+  const duplicate = await call(
+    topicPath,
+    second.token,
+    proposal('UNG DUNG THU VIEN THONG MINH'),
+    201,
+  );
+  const backup = await call(
+    topicPath,
+    student.token,
+    proposal('Phân loại cây trồng bằng ảnh'),
+    201,
+  );
+  topics.push(first.id, duplicate.id, backup.id);
+  const review = (id) => `${topicPath}/${id}/review`;
+  const queue = await call(topicPath, lecturer.token);
+  check(
+    queue.topics.find((t) => t.id === first.id).can_review,
+    true,
+    'Lecturer has final approval in the UI',
+  );
+  await call(review(first.id), colleague.token, { decision: 'approve' }, 403);
+  await call(review(first.id), student.token, { decision: 'approve' }, 403);
+  const similarity = await call(`${topicPath}/${first.id}/similar`, lecturer.token);
+  check(similarity.find((t) => t.id === duplicate.id).score, 100);
+  await call(review(first.id), lecturer.token, { decision: 'reject', feedback: ' ' }, 400);
+  await call(review(first.id), lecturer.token, {
+    decision: 'revise',
+    feedback: 'Bổ sung mục tiêu kiểm thử.',
+  });
+  const feedback = (await call(topicPath, student.token)).topics.find((t) => t.id === first.id);
+  check(feedback.feedback, 'Bổ sung mục tiêu kiểm thử.');
+  check(feedback.can_edit, true);
+  await call(
+    `${topicPath}/${first.id}`,
+    student.token,
+    { ...proposal(first.title_vi), objectives: 'Kiểm thử các chức năng mượn trả.' },
+    200,
+    'PATCH',
+  );
+  await setMilestone('TOPIC_APPROVAL', start, end, true);
+  await call(review(first.id), lecturer.token, { decision: 'approve' }, 403);
+  await setMilestone('TOPIC_APPROVAL', start, end);
+  await call(review(first.id), lecturer.token, { decision: 'approve' });
+  await call(
+    review(first.id),
+    lecturer.token,
+    { decision: 'reject', feedback: 'Không được duyệt lại' },
+    409,
+  );
+  await call(`${topicPath}/${first.id}`, student.token, proposal(first.title_vi), 409, 'PATCH');
+  await pool.query('UPDATE topics SET co_supervisor_id=$2 WHERE id=$1', [
+    duplicate.id,
+    colleague.id,
+  ]);
+  check(
+    (await call(topicPath, colleague.token)).topics.find((t) => t.id === duplicate.id).can_review,
+    true,
+    'Co-supervisor can approve assigned proposals',
+  );
+  await call(review(duplicate.id), colleague.token, { decision: 'approve' });
+  await call(review(backup.id), admin.token, { decision: 'approve' });
+  const own = await call(topicPath, lecturer.token, proposal('Đề tài giảng viên tự đề xuất'), 201);
+  topics.push(own.id);
+  check(
+    (await call(topicPath, lecturer.token)).topics.find((t) => t.id === own.id).can_review,
+    false,
+  );
+  await call(review(own.id), lecturer.token, { decision: 'approve' }, 403);
+  await call(review(own.id), admin.token, { decision: 'reject', feedback: 'Bản ghi kiểm thử.' });
+  const archive = await call(
+    '/topic-archive?year=2092&direction=' + encodeURIComponent('Thư viện'),
+    student.token,
+  );
+  check(
+    archive.some((t) => t.id === first.id),
+    true,
+  );
+  check(
+    archive.some((t) => t.id === own.id),
+    false,
+  );
+  const campaigns = await call('/master-data/campaigns', student.token);
+  const campaign = campaigns.find((c) => c.id === ids.campaign);
+  check(campaign.academic_year_start, 2092);
+  check(campaign.academic_year_end, 2093);
+  const { campaignLabel } = await import(
+    'data:text/javascript;base64,' +
+      require('node:fs')
+        .readFileSync(require('node:path').join(__dirname, '../../frontend/src/ui.js'))
+        .toString('base64')
+  );
+  check(campaignLabel(campaign).includes('2092–2093'), true);
+  check(
+    campaignLabel({
+      name: 'Đồ án',
+      semester_name: 'Học kỳ 1 (2026–2027)',
+      academic_year_start: 2026,
+      academic_year_end: 2027,
+    }),
+    'Học kỳ 1 (2026–2027) · Đồ án',
+  );
+  const groupA = await call(
+    root + '/groups',
+    student.token,
+    { name: 'Nhóm A', research_direction: 'Thư viện' },
+    201,
+  );
+  const groupB = await call(
+    root + '/groups',
+    second.token,
+    { name: 'Nhóm B', research_direction: 'Thư viện' },
+    201,
+  );
+  const groupPath = (group) => `${root}/wish-groups/${group.id}`;
+  const wish = (group, actor, topic, priority) =>
+    call(
+      groupPath(group) + '/registrations',
+      actor.token,
+      { topic_id: topic.id, priority_order: priority },
+      201,
+    );
+  const wishA = await wish(groupA, student, first, 1);
+  await wish(groupA, student, backup, 2);
+  const wishB = await wish(groupB, second, first, 1);
+  await wish(groupB, second, duplicate, 2);
+  await call(groupPath(groupA), second.token, null, 404);
+  await call(
+    groupPath(groupA) + '/registrations',
+    student.token,
+    { topic_id: duplicate.id, priority_order: 1 },
+    409,
+  );
+  const current = await call(groupPath(groupA), student.token);
+  const expected = current.registrations.map((r) => [
+    r.id,
+    r.priority_order,
+    r.student_note,
+    r.status,
+  ]);
+  await call(
+    groupPath(groupA) + '/registrations',
+    student.token,
+    {
+      expected,
+      registrations: current.registrations.map((r) => ({
+        topic_id: r.topic_id,
+        priority_order: r.priority_order,
+        student_note: r.student_note,
+      })),
+    },
+    200,
+    'PUT',
+  );
+  await pool.query(
+    'INSERT INTO lecturer_quotas(campaign_id,lecturer_id,max_students,max_topics) VALUES ($1,$2,2,2)',
+    [ids.campaign, lecturer.id],
+  );
+  const settings = { algorithm: 'GALE_SHAPLEY_GROUP', criteria: ['LECTURER_RANK', 'CODE'] };
+  await call(root + '/matching-runs', admin.token, settings, 403);
+  await setMilestone(
+    'WISH_REGISTRATION',
+    new Date(Date.now() - 7200000),
+    new Date(Date.now() - 1000),
+  );
+  await call(
+    groupPath(groupA) + '/registrations',
+    student.token,
+    { topic_id: duplicate.id, priority_order: 3 },
+    403,
+  );
+  await call(`${root}/lecturer-wishes/${wishA.id}/rank`, lecturer.token, { rank: 2 }, 200, 'PUT');
+  await call(`${root}/lecturer-wishes/${wishB.id}/rank`, lecturer.token, { rank: 1 }, 200, 'PUT');
+  await call(root + '/matching-runs', student.token, settings, 403);
+  const run = await call(root + '/matching-runs', admin.token, settings, 201);
+  check(run.result.pairs.length, 2);
+  check(run.result.pairs.find((p) => p.group_id === groupB.id).topic_id, first.id);
+  const confirmUntil = new Date(Date.now() + 3600000).toISOString();
+  await call(`${root}/matching-runs/${run.id}/publish`, admin.token, {
+    confirm_until: confirmUntil,
+  });
+  const offersA = (await call(groupPath(groupA), student.token)).offers;
+  const offersB = (await call(groupPath(groupB), second.token)).offers;
+  check(offersA.length, 1);
+  check(offersB.length, 1);
+  const offerPath = (id) => `${root}/matching-offers/${id}`;
+  await call(offerPath(offersA[0].id), second.token, { decision: 'CONFIRMED' }, 404, 'PATCH');
+  await call(offerPath(offersA[0].id), student.token, { decision: 'CONFIRMED' }, 200, 'PATCH');
+  await call(offerPath(offersA[0].id), student.token, { decision: 'CONFIRMED' }, 200, 'PATCH');
+  await call(offerPath(offersB[0].id), second.token, { decision: 'DECLINED' }, 200, 'PATCH');
+  const assigned = (await call(groupPath(groupA), student.token)).assignment;
+  check(assigned.topic_id, backup.id);
+  const assignments = (
+    await pool.query('SELECT supervisor_id FROM thesis_assignments WHERE group_id=$1', [groupA.id])
+  ).rows;
+  check(assignments.length, 1);
+  check(assignments[0].supervisor_id, lecturer.id);
+  check(
+    (
+      await pool.query(
+        'SELECT current_assigned_students FROM lecturer_quotas WHERE campaign_id=$1 AND lecturer_id=$2',
+        [ids.campaign, lecturer.id],
+      )
+    ).rows[0].current_assigned_students,
+    1,
+  );
+  const round2 = await call(root + '/matching-runs', admin.token, settings, 201);
+  check(round2.round, 2);
+  check(round2.result.pairs.length, 1);
+  check(round2.result.pairs[0].topic_id, duplicate.id);
+  await call(`${root}/matching-runs/${round2.id}/publish`, admin.token, {
+    confirm_until: confirmUntil,
+  });
+  const finalOffer = (await call(groupPath(groupB), second.token)).offers.find(
+    (o) => o.status === 'PENDING',
+  );
+  await call(offerPath(finalOffer.id), second.token, { decision: 'CONFIRMED' }, 200, 'PATCH');
+  check((await call(groupPath(groupB), second.token)).assignment.topic_id, duplicate.id);
+  check(
+    (
+      await pool.query(
+        'SELECT current_assigned_students FROM lecturer_quotas WHERE campaign_id=$1 AND lecturer_id=$2',
+        [ids.campaign, lecturer.id],
+      )
+    ).rows[0].current_assigned_students,
+    2,
+  );
+  console.log(
+    'Complete Sprint 3 HTTP flow passed: proposal, lecturer approval, archive, wishes, matching, publication, confirmation/refusal and second round.',
+  );
 }
 
 run()

@@ -1,3 +1,5 @@
+import { campaignLabel } from './ui.js';
+
 const reviewerRoles = new Set(['DEPT_HEAD', 'FACULTY_MANAGER', 'TRAINING_DEPT', 'SYSTEM_ADMIN']);
 const workflowRoles = new Set(['STUDENT', 'LECTURER', ...reviewerRoles]);
 
@@ -25,7 +27,7 @@ export async function renderTopicWorkflow(area, { api, esc, notify, role }) {
   const options = campaigns
     .map(
       (campaign) =>
-        `<option value="${esc(campaign.id)}">${esc(campaign.name)} · ${campaign.status === 'OPEN' ? 'Đang mở' : 'Đang thực hiện'}</option>`,
+        `<option value="${esc(campaign.id)}">${esc(campaignLabel(campaign))} · ${campaign.status === 'OPEN' ? 'Đang mở' : 'Đang thực hiện'}</option>`,
     )
     .join('');
   area.innerHTML =

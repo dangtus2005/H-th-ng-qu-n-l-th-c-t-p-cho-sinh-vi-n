@@ -1,4 +1,4 @@
-import { icon, enhanceUI } from './ui.js';
+import { icon, enhanceUI, campaignLabel } from './ui.js';
 let c;
 let selected = '';
 let editing = false;
@@ -19,7 +19,7 @@ export const sprint2Pages = {
 
 const phaseNames = {
   CAMPAIGN_ENROLLMENT: 'Đăng ký tham gia đợt',
-  TOPIC_SUBMISSION: 'Giảng viên gửi đề tài',
+  TOPIC_SUBMISSION: 'Đề xuất đề tài',
   TOPIC_APPROVAL: 'Duyệt đề tài',
   DIRECTION_SELECTION: 'Chọn hướng đề tài',
   WISH_REGISTRATION: 'Đăng ký nguyện vọng',
@@ -390,7 +390,14 @@ async function renderCampaigns(area) {
         <h2>Đợt thực tập & đồ án</h2>
         ${manage() ? '<button type="button" data-s2-action="new-campaign">Thêm đợt</button>' : ''}
       </div>
-      <div class="panel-body">${select('s2-campaign', 'Đợt đang xem', campaigns, selected)}</div>
+      <div class="panel-body">
+        ${select(
+          's2-campaign',
+          'Đợt đang xem',
+          campaigns.map((row) => ({ ...row, name: campaignLabel(row) })),
+          selected,
+        )}
+      </div>
     </section>
     <div id="campaign-details"></div>`;
   const details = area.querySelector('#campaign-details');
@@ -410,7 +417,7 @@ async function renderCampaigns(area) {
           ? select('faculty_id', 'Khoa', faculties) +
             select('major_id', 'Ngành', majors, '', true) +
             select('semester_id', 'Học kỳ', semesters)
-          : '<p class="small muted span-2">Khoa/ngành/học kỳ được giữ cố định để bảo toàn liên kết dữ liệu.</p>') +
+          : `<p class="small muted span-2">Học kỳ: ${esc(campaignLabel({ ...p, name: '' }))}. Khoa/ngành/học kỳ được giữ cố định để bảo toàn liên kết dữ liệu.</p>`) +
         select('type', 'Loại đợt', types, p.type || 'THESIS') +
         select(
           'training_system',
@@ -457,6 +464,13 @@ async function renderCampaigns(area) {
         /* HTML */ `<label class="checkbox span-2"
             ><input
               type="checkbox"
+              name="allow_student_propose_topic"
+              ${p.allow_student_propose_topic !== false ? 'checked' : ''}
+            />Cho phép sinh viên tự đề xuất đề tài</label
+          >
+          <label class="checkbox span-2"
+            ><input
+              type="checkbox"
               name="allow_self_find_company"
               ${p.allow_self_find_company !== false ? 'checked' : ''}
             />Cho phép sinh viên tự tìm nơi thực tập</label
@@ -471,7 +485,7 @@ async function renderCampaigns(area) {
   }
   details.innerHTML = /* HTML */ `<section class="panel">
       <div class="panel-header">
-        <h2>${esc(campaign.name)}</h2>
+        <h2>${esc(campaignLabel(campaign))}</h2>
         <span class="tag">${esc(statuses[campaign.status])}</span>
       </div>
       <div class="panel-body">
@@ -481,6 +495,10 @@ async function renderCampaigns(area) {
           </div>
           <div>
             <span>Nguyện vọng tối đa</span><strong>${esc(campaign.max_wish_choices)}</strong>
+          </div>
+          <div>
+            <span>Tự đề xuất đề tài</span
+            ><strong>${campaign.allow_student_propose_topic ? 'Cho phép' : 'Tắt'}</strong>
           </div>
           <div>
             <span>Hệ đào tạo</span
@@ -754,6 +772,7 @@ export function setupSprint2(context) {
           v.min_credits_required === '' ? null : Number(v.min_credits_required);
         v.max_students_per_topic = Number(v.max_students_per_topic);
         v.max_wish_choices = Number(v.max_wish_choices);
+        v.allow_student_propose_topic = formData.has('allow_student_propose_topic');
         v.allow_self_find_company = formData.has('allow_self_find_company');
         const result = await c.api(
           '/master-data/campaigns' + (editing === 'new' ? '' : '/' + selected),

@@ -33,8 +33,10 @@ export const listSpecializations = async (req: Request, res: Response): Promise<
 export const listCampaigns = async (req: Request, res: Response): Promise<void> => {
   const s = req.user!.scope;
   const { rows } = await pool.query(
-    `SELECT c.*,f.name AS faculty_name,m.name AS major_name,se.name AS semester_name FROM campaigns c
+    `SELECT c.*,f.name AS faculty_name,m.name AS major_name,se.name AS semester_name,
+      ay.start_year AS academic_year_start,ay.end_year AS academic_year_end FROM campaigns c
     JOIN faculties f ON f.id=c.faculty_id LEFT JOIN majors m ON m.id=c.major_id JOIN semesters se ON se.id=c.semester_id
+    JOIN academic_years ay ON ay.id=se.academic_year_id
     WHERE $1::boolean OR (c.faculty_id=$2::uuid AND ($3::uuid IS NULL OR c.id=$3)
       AND ($4::uuid IS NULL OR c.major_id=$4 OR c.major_id IS NULL)
       AND ($5::uuid IS NULL OR m.department_id=$5 OR c.major_id IS NULL)) ORDER BY c.created_at DESC`,
@@ -226,17 +228,24 @@ export const createCampaign = async (req: Request, res: Response): Promise<void>
     ) {
       fail('Hệ đào tạo không tồn tại');
     }
+    if (
+      b.allow_student_propose_topic !== undefined &&
+      typeof b.allow_student_propose_topic !== 'boolean'
+    ) {
+      fail('Cờ tự đề xuất không hợp lệ');
+    }
     const policy = eligibilityPolicy(b);
     if (b.allow_self_find_company !== undefined && typeof b.allow_self_find_company !== 'boolean')
       fail('Cấu hình tự tìm nơi thực tập không hợp lệ');
     rows[0] = (
       await client.query(
-        `UPDATE campaigns SET training_system=$1,max_students_per_topic=$2,max_wish_choices=$3,
-         enforce_min_credits=$5,min_credits_required=$6,prerequisite_note=$7,allow_self_find_company=$8 WHERE id=$4 RETURNING *`,
+        `UPDATE campaigns SET training_system=$1,max_students_per_topic=$2,max_wish_choices=$3,allow_student_propose_topic=$4,
+         enforce_min_credits=$6,min_credits_required=$7,prerequisite_note=$8,allow_self_find_company=$9 WHERE id=$5 RETURNING *`,
         [
           b.training_system || null,
           integer(b.max_students_per_topic ?? 2, 'SV/đề tài', 1, 50),
           integer(b.max_wish_choices ?? 3, 'Nguyện vọng', 1, 5),
+          b.allow_student_propose_topic ?? true,
           rows[0].id,
           policy.enforce_min_credits,
           policy.min_credits_required,

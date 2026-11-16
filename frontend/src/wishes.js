@@ -1,3 +1,5 @@
+import { campaignLabel } from './ui.js';
+
 const statuses = {
   PENDING_LECTURER: 'Chờ giảng viên',
   APPROVED_BY_LECTURER: 'Đã ghép cặp',
@@ -20,7 +22,7 @@ export async function renderWishes(area, { api, esc, notify, role }) {
   }
   const option = (id, label) => `<option value="${esc(id)}">${esc(label)}</option>`;
   area.innerHTML = `<section class="panel"><div class="panel-body form-grid">
-    <label>Đợt<select name="wish-campaign">${campaigns.map((c) => option(c.id, c.name)).join('')}</select></label>
+    <label>Đợt<select name="wish-campaign">${campaigns.map((c) => option(c.id, campaignLabel(c))).join('')}</select></label>
     ${student ? '<label>Nhóm<select name="wish-group" disabled></select></label>' : ''}
   </div></section><div class="${student ? 's2-grid' : 'lecturer-wishes'}" data-wish-results aria-live="polite"></div>`;
   const campaign = area.querySelector('[name=wish-campaign]');

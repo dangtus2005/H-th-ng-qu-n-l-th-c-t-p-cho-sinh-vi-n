@@ -448,9 +448,13 @@ async function run() {
   }
 }
 
-run()
-  .catch((e) => {
-    console.error(e.message);
-    process.exitCode = 1;
-  })
-  .finally(() => pool.end());
+module.exports = { id, pdf, insert };
+
+if (require.main === module) {
+  run()
+    .catch((e) => {
+      console.error(e.message);
+      process.exitCode = 1;
+    })
+    .finally(() => pool.end());
+}
